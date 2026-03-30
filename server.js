@@ -400,10 +400,6 @@ Next step: Text or call- offer comfort visit`
       `Thanks for calling Messenger Orthodontics. For emergencies like trauma, bleeding, or swelling, Dr. Messenger is always available on her cell phone at (714) 500-7127. We have also sent your message to our team and someone will text you shortly.`;
   }
 
-  if (callerNumber) {
-    await safeText(callerNumber, patientText);
-  }
-
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your message to our team.");
   twiml.redirect("/anything-else");
@@ -494,13 +490,6 @@ Preferred days/times: ${preferredTimes}
 Next step: Text or call with appointment options`
   );
 
-  if (callerNumber) {
-    await safeText(
-      callerNumber,
-      `Thanks for calling Messenger Orthodontics. We received your scheduling request and a team member will text you shortly.`
-    );
-  }
-
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your request to our team.");
   twiml.redirect("/anything-else");
@@ -589,13 +578,6 @@ Preferred days/times: ${preferredTimes}
 Next step: Text rescheduling options and reappoint as soon as possible- reinterate need to come in ASAP to keep treatment on track`
   );
 
-  if (callerNumber) {
-    await safeText(
-      callerNumber,
-      `Thanks for calling Messenger Orthodontics. We received your request to reschedule and a team member will text you shortly.`
-    );
-  }
-
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your request to our team.");
   twiml.redirect("/anything-else");
@@ -660,13 +642,6 @@ Caller: ${callerNumber}
 Reason: ${reason}
 Next step: Text follow-up`
   );
-
-  if (callerNumber) {
-    await safeText(
-      callerNumber,
-      `Thanks for calling Messenger Orthodontics. We received your message and a team member will text you shortly.`
-    );
-  }
 
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your message to our team.");

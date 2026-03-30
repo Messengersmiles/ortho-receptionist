@@ -55,20 +55,23 @@ function sayMessage(twiml, message) {
 function normalizeSpeech(text) {
   return (text || "").trim();
 }
-function repeatIfNoInput(twiml, actionUrl, message, hints = "") {
+function repeatIfNoInput(twiml, actionUrl, message, hints = "", inputType = "speech") {
   sayMessage(twiml, "I did not catch that. Please repeat.");
 
-  twiml.gather({
-    input: "speech dtmf",
+  const gather = twiml.gather({
+    input: inputType,
     action: actionUrl,
     method: "POST",
     timeout: 5,
+    numDigits: inputType.includes("dtmf") ? 1 : undefined,
     speechTimeout: "auto",
     enhanced: true,
     speechModel: "phone_call",
     language: "en-US",
     hints: hints,
-  }).say(
+  });
+
+  gather.say(
     { voice: "Google.en-US-Wavenet-F" },
     message
   );
@@ -930,6 +933,31 @@ Next step: Text follow-up`
 });
 
 // ===== ANYTHING ELSE =====
+app.post("/anything-else", (req, res) => {
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  const gather = twiml.gather({
+    input: "speech dtmf",
+    action: "/anything-else-handle",
+    method: "POST",
+    numDigits: 1,
+    timeout: 4,
+    speechTimeout: "auto",
+    enhanced: true,
+    speechModel: "phone_call",
+    language: "en-US",
+    hints: "yes, no",
+  });
+
+  gather.say(
+    { voice: "Google.en-US-Wavenet-F" },
+    "Is there anything else I can help you with? Please say yes or no."
+  );
+
+  res.type("text/xml");
+  res.send(twiml.toString());
+});
+
 app.post("/anything-else-handle", (req, res) => {
   const answer = (req.body.SpeechResult || req.body.Digits || "").toLowerCase();
   const twiml = new twilio.twiml.VoiceResponse();
@@ -957,20 +985,6 @@ app.post("/anything-else-handle", (req, res) => {
   res.send(twiml.toString());
 });
 
-app.post("/anything-else-handle", (req, res) => {
-  const answer = (req.body.SpeechResult || req.body.Digits || "").toLowerCase();
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  if (answer.includes("yes") || answer === "1") {
-    twiml.redirect("/main-menu-only");
-  } else {
-    sayMessage(twiml, "Thank you for calling Messenger Orthodontics. Goodbye.");
-    twiml.hangup();
-  }
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-});
 
 // ===== SERVER =====
 const PORT = 5050;

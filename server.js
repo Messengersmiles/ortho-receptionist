@@ -56,8 +56,6 @@ function normalizeSpeech(text) {
   return (text || "").trim();
 }
 function repeatIfNoInput(twiml, actionUrl, message, hints = "", inputType = "speech") {
-  sayMessage(twiml, "I did not catch that. Please repeat.");
-
   const gather = twiml.gather({
     input: inputType,
     action: actionUrl,
@@ -69,11 +67,12 @@ function repeatIfNoInput(twiml, actionUrl, message, hints = "", inputType = "spe
     speechModel: "phone_call",
     language: "en-US",
     hints: hints,
+    actionOnEmptyResult: true,
   });
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
-    message
+    "I did not catch that. Please repeat. " + message
   );
 }
 function classifyMenuChoice(input) {

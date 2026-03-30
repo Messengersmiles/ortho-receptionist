@@ -219,7 +219,7 @@ app.post("/new-patient-age-group", (req, res) => {
   // ✅ GOOD INPUT → move on
   sayMessage(
     twiml,
-    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite."
+    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite. Be as desript as you would like."
   );
 
   twiml.gather({

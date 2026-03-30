@@ -170,9 +170,31 @@ app.post("/handle-main-menu", (req, res) => {
 app.post("/new-patient-age-group", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
+  // ✅ FIRST TIME (no speech yet)
+  if (!req.body.SpeechResult) {
+    sayMessage(
+      twiml,
+      "Great. We are excited to meet you. Is this consultation for a child, teenager, or adult?"
+    );
+
+    twiml.gather({
+      input: "speech",
+      action: "/new-patient-age-group",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "child, teenager, adult",
+    });
+
+    res.type("text/xml");
+    return res.send(twiml.toString());
+  }
+
+  // ✅ SECOND TIME (user responded)
   const input = normalizeSpeech(req.body.SpeechResult);
 
-  // ✅ If nothing heard → retry
   if (!input || input.length < 2) {
     sayMessage(
       twiml,
@@ -194,7 +216,7 @@ app.post("/new-patient-age-group", (req, res) => {
     return res.send(twiml.toString());
   }
 
-  // ✅ Continue flow
+  // ✅ GOOD INPUT → move on
   sayMessage(
     twiml,
     "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite."
@@ -208,30 +230,6 @@ app.post("/new-patient-age-group", (req, res) => {
     enhanced: true,
     speechModel: "phone_call",
     language: "en-US",
-  });
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-});
-
-app.post("/new-patient-concern", (req, res) => {
-  const ageGroup = normalizeSpeech(req.body.SpeechResult);
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  sayMessage(
-    twiml,
-    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite."
-  );
-
-  twiml.gather({
-    input: "speech",
-    action: `/new-patient-time?ageGroup=${encodeURIComponent(ageGroup)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: "braces, invisalign, new retainers, crowding, spacing, bite",
   });
 
   res.type("text/xml");

@@ -111,7 +111,7 @@ function buildMainMenu(twiml) {
     speechModel: "phone_call",
     language: "en-US",
     hints:
-      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule appointment, reschedule an existing appointment, another reason for my call",
+      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule an appointment, reschedule an existing appointment, another reason for my call",
   });
 
   gather.say(

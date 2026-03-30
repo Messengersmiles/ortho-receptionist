@@ -14,6 +14,11 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 
+const tuesdayOverride = null;
+// Use null for normal automatic A/B schedule
+// Use "short" to force Tuesday lunch to 1:00 PM - 1:40 PM
+// Use "long" to force Tuesday lunch to 12:00 PM - 1:30 PM
+
 // ===== HELPERS =====
 function formatPhoneNumber(number) {
   if (!number) return "";
@@ -120,14 +125,78 @@ function buildMainMenu(twiml) {
   );
 }
 
+function getLosAngelesTime() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
+  );
+}
+
+function getMinutesSinceMidnight(dateObj) {
+  return dateObj.getHours() * 60 + dateObj.getMinutes();
+}
+
+function isLunchTime(dateObj) {
+  const day = dateObj.getDay(); // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  const currentMinutes = getMinutesSinceMidnight(dateObj);
+
+  // Monday: 1:00 PM - 1:40 PM
+  if (day === 1) {
+    return currentMinutes >= 13 * 60 && currentMinutes < 13 * 60 + 40;
+  }
+
+  // Tuesday: A/B schedule with optional manual override
+  // Anchor: Tuesday, March 31, 2026 = "short" lunch (1:00 PM - 1:40 PM)
+  if (day === 2) {
+    let mode;
+
+    if (tuesdayOverride === "short" || tuesdayOverride === "long") {
+      mode = tuesdayOverride;
+    } else {
+      const anchorTuesday = new Date(2026, 2, 31); // March 31, 2026
+      const currentTuesday = new Date(
+        dateObj.getFullYear(),
+        dateObj.getMonth(),
+        dateObj.getDate()
+      );
+
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const diffInDays = Math.round((currentTuesday - anchorTuesday) / msPerDay);
+      const diffInWeeks = Math.floor(diffInDays / 7);
+
+      mode = diffInWeeks % 2 === 0 ? "short" : "long";
+    }
+
+    if (mode === "short") {
+      return currentMinutes >= 13 * 60 && currentMinutes < 13 * 60 + 40;
+    } else {
+      return currentMinutes >= 12 * 60 && currentMinutes < 13 * 60 + 30;
+    }
+  }
+
+  // Wednesday and Thursday: 12:00 PM - 1:30 PM
+  if (day === 3 || day === 4) {
+    return currentMinutes >= 12 * 60 && currentMinutes < 13 * 60 + 30;
+  }
+
+  return false;
+}
+
 // ===== MAIN MENU =====
 app.post("/voice", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
+  const laTime = getLosAngelesTime();
 
-  sayMessage(
-    twiml,
-    "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
-  );
+  if (isLunchTime(laTime)) {
+    sayMessage(
+      twiml,
+      "Hi, thank you for calling Messenger Orthodontics. We are away from the front desk for lunch, but I can gather your information and a team member will get back to you. How can I help you today?"
+    );
+  } else {
+    sayMessage(
+      twiml,
+      "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
+    );
+  }
 
   buildMainMenu(twiml);
 

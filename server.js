@@ -111,12 +111,12 @@ function buildMainMenu(twiml) {
     speechModel: "phone_call",
     language: "en-US",
     hints:
-      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule appointment, reschedule appointment, another reason for my call",
+      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule appointment, reschedule an existing appointment, another reason for my call",
   });
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
-    "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 to schedule an appointment, 4 to reschedule an appointment, or 5 for another reason for your call."
+    "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 to schedule an appointment, 4 to reschedule an existing appointment, or 5 for another reason for your call."
   );
 }
 

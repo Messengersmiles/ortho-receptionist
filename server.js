@@ -170,20 +170,44 @@ app.post("/handle-main-menu", (req, res) => {
 app.post("/new-patient-age-group", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
+  const input = normalizeSpeech(req.body.SpeechResult);
+
+  // ✅ If nothing heard → retry
+  if (!input || input.length < 2) {
+    sayMessage(
+      twiml,
+      "I did not catch that. Please say child, teenager, or adult."
+    );
+
+    twiml.gather({
+      input: "speech",
+      action: "/new-patient-age-group",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "child, teenager, adult",
+    });
+
+    res.type("text/xml");
+    return res.send(twiml.toString());
+  }
+
+  // ✅ Continue flow
   sayMessage(
     twiml,
-    "Awesome. We are excited to meet you. Is this consultation for a child, teen, or adult?"
+    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite."
   );
 
   twiml.gather({
     input: "speech",
-    action: "/new-patient-concern",
+    action: `/new-patient-time?ageGroup=${encodeURIComponent(input)}`,
     method: "POST",
     speechTimeout: "auto",
     enhanced: true,
     speechModel: "phone_call",
     language: "en-US",
-    hints: "child, teen, adult",
   });
 
   res.type("text/xml");

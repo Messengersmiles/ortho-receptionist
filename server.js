@@ -14,10 +14,10 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 
-const tuesdayOverride = null;
-// Use null for normal automatic A/B schedule
-// Use "short" to force Tuesday lunch to 1:00 PM - 1:40 PM
-// Use "long" to force Tuesday lunch to 12:00 PM - 1:30 PM
+const twilioNumber = "+17144770304";
+const officeLineTextNumber = "+17149420707";
+const doctorEmergencyNumber = "+17145007127";
+const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 
 // ===== HELPERS =====
 function formatPhoneNumber(number) {
@@ -55,26 +55,30 @@ function sayMessage(twiml, message) {
 function normalizeSpeech(text) {
   return (text || "").trim();
 }
-function repeatIfNoInput(twiml, actionUrl, message, hints = "", inputType = "speech") {
-  const gather = twiml.gather({
-    input: inputType,
-    action: actionUrl,
-    method: "POST",
-    timeout: 5,
-    numDigits: inputType.includes("dtmf") ? 1 : undefined,
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: hints,
-    actionOnEmptyResult: true,
-  });
 
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "I did not catch that. Please repeat. " + message
-  );
+function yesNoValue(input) {
+  const text = (input || "").toLowerCase().trim();
+
+  if (
+    text === "1" ||
+    text.includes("yes") ||
+    text.includes("yeah") ||
+    text.includes("yep")
+  ) {
+    return "Yes";
+  }
+
+  if (
+    text === "2" ||
+    text.includes("no") ||
+    text.includes("nope")
+  ) {
+    return "No";
+  }
+
+  return normalizeSpeech(input);
 }
+
 function classifyMenuChoice(input) {
   const text = (input || "").toLowerCase().trim();
 
@@ -104,20 +108,11 @@ function classifyMenuChoice(input) {
   if (
     text === "3" ||
     text.includes("three") ||
-    text.includes("schedule appointment") ||
-    text.includes("schedule an appointment") ||
-    (text.includes("schedule") && !text.includes("reschedule"))
+    text.includes("schedule") ||
+    text.includes("reschedule") ||
+    text.includes("appointment")
   ) {
     return "schedule";
-  }
-
-  if (
-    text === "4" ||
-    text.includes("four") ||
-    text.includes("reschedule") ||
-    text.includes("change my appointment")
-  ) {
-    return "reschedule";
   }
 
   return "other";
@@ -135,87 +130,23 @@ function buildMainMenu(twiml) {
     speechModel: "phone_call",
     language: "en-US",
     hints:
-      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule an appointment, reschedule an existing appointment, another reason for my call",
+      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule, reschedule, another reason for my call",
   });
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
-    "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 to schedule an appointment, 4 to reschedule an existing appointment, or 5 for another reason for your call."
+    "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 for schedule or reschedule an appointment, or 4 for another reason for your call."
   );
-}
-
-function getLosAngelesTime() {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  );
-}
-
-function getMinutesSinceMidnight(dateObj) {
-  return dateObj.getHours() * 60 + dateObj.getMinutes();
-}
-
-function isLunchTime(dateObj) {
-  const day = dateObj.getDay(); // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-  const currentMinutes = getMinutesSinceMidnight(dateObj);
-
-  // Monday: 1:00 PM - 1:40 PM
-  if (day === 1) {
-    return currentMinutes >= 13 * 60 && currentMinutes < 13 * 60 + 40;
-  }
-
-  // Tuesday: A/B schedule with optional manual override
-  // Anchor: Tuesday, March 31, 2026 = "short" lunch (1:00 PM - 1:40 PM)
-  if (day === 2) {
-    let mode;
-
-    if (tuesdayOverride === "short" || tuesdayOverride === "long") {
-      mode = tuesdayOverride;
-    } else {
-      const anchorTuesday = new Date(2026, 2, 31); // March 31, 2026
-      const currentTuesday = new Date(
-        dateObj.getFullYear(),
-        dateObj.getMonth(),
-        dateObj.getDate()
-      );
-
-      const msPerDay = 24 * 60 * 60 * 1000;
-      const diffInDays = Math.round((currentTuesday - anchorTuesday) / msPerDay);
-      const diffInWeeks = Math.floor(diffInDays / 7);
-
-      mode = diffInWeeks % 2 === 0 ? "short" : "long";
-    }
-
-    if (mode === "short") {
-      return currentMinutes >= 13 * 60 && currentMinutes < 13 * 60 + 40;
-    } else {
-      return currentMinutes >= 12 * 60 && currentMinutes < 13 * 60 + 30;
-    }
-  }
-
-  // Wednesday and Thursday: 12:00 PM - 1:30 PM
-  if (day === 3 || day === 4) {
-    return currentMinutes >= 12 * 60 && currentMinutes < 13 * 60 + 30;
-  }
-
-  return false;
 }
 
 // ===== MAIN MENU =====
 app.post("/voice", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
-  const laTime = getLosAngelesTime();
 
-  if (isLunchTime(laTime)) {
-    sayMessage(
-      twiml,
-      "Hi, thank you for calling Messenger Orthodontics. We are away from the front desk for lunch, but I can gather your information and a team member will get back to you. How can I help you today?"
-    );
-  } else {
-    sayMessage(
-      twiml,
-      "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
-    );
-  }
+  sayMessage(
+    twiml,
+    "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
+  );
 
   buildMainMenu(twiml);
 
@@ -235,30 +166,15 @@ app.post("/main-menu-only", (req, res) => {
 
 app.post("/handle-main-menu", (req, res) => {
   const input = req.body.SpeechResult || req.body.Digits || "";
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  if (!input || !String(input).trim()) {
-    repeatIfNoInput(
-      twiml,
-      "/handle-main-menu",
-      "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 to schedule an appointment, 4 to reschedule an existing appointment, or 5 for another reason for your call.",
-      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule an appointment, reschedule an existing appointment, another reason for my call",
-      "speech dtmf"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   const route = classifyMenuChoice(input);
+  const twiml = new twilio.twiml.VoiceResponse();
 
   if (route === "new-patient") {
     twiml.redirect("/new-patient-age-group");
   } else if (route === "comfort-visit") {
     twiml.redirect("/comfort-visit-issue");
   } else if (route === "schedule") {
-    twiml.redirect("/schedule-appt-type");
-  } else if (route === "reschedule") {
-    twiml.redirect("/reschedule-protocol");
+    twiml.redirect("/schedule-type");
   } else {
     twiml.redirect("/other-reason");
   }
@@ -271,64 +187,45 @@ app.post("/handle-main-menu", (req, res) => {
 app.post("/new-patient-age-group", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (!req.body.SpeechResult) {
-    const gather = twiml.gather({
-      input: "speech",
-      action: "/new-patient-age-group",
-      method: "POST",
-      speechTimeout: "auto",
-      enhanced: true,
-      speechModel: "phone_call",
-      language: "en-US",
-      hints: "child, teenager, adult",
-    });
+  sayMessage(
+    twiml,
+    "Awesome. We are excited to meet you. Is this consultation for a child, teen, or adult?"
+  );
 
-    gather.say(
-      { voice: "Google.en-US-Wavenet-F" },
-      "Great. We are excited to meet you. Is this consultation for a child, teenager, or adult?"
-    );
-
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
-  const input = normalizeSpeech(req.body.SpeechResult);
-
-  if (!input || input.length < 2) {
-    const gather = twiml.gather({
-      input: "speech",
-      action: "/new-patient-age-group",
-      method: "POST",
-      speechTimeout: "auto",
-      enhanced: true,
-      speechModel: "phone_call",
-      language: "en-US",
-      hints: "child, teenager, adult",
-    });
-
-    gather.say(
-      { voice: "Google.en-US-Wavenet-F" },
-      "I didn't catch that, can you please repeat. Is this consultation for a child, teenager, or adult?"
-    );
-
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
-  const gather = twiml.gather({
+  twiml.gather({
     input: "speech",
-    action: `/new-patient-time?ageGroup=${encodeURIComponent(input)}`,
+    action: "/new-patient-concern",
     method: "POST",
     speechTimeout: "auto",
     enhanced: true,
     speechModel: "phone_call",
     language: "en-US",
+    hints: "child, teen, adult",
   });
 
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite. Be as descript as you would like."
+  res.type("text/xml");
+  res.send(twiml.toString());
+});
+
+app.post("/new-patient-concern", (req, res) => {
+  const ageGroup = normalizeSpeech(req.body.SpeechResult);
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  sayMessage(
+    twiml,
+    "What is the patient's main concern today? For example braces, Invisalign, crowding, spacing, or bite."
   );
+
+  twiml.gather({
+    input: "speech",
+    action: `/new-patient-time?ageGroup=${encodeURIComponent(ageGroup)}`,
+    method: "POST",
+    speechTimeout: "auto",
+    enhanced: true,
+    speechModel: "phone_call",
+    language: "en-US",
+    hints: "braces, invisalign, crowding, spacing, bite",
+  });
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -339,19 +236,12 @@ app.post("/new-patient-time", (req, res) => {
   const concern = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (!concern || concern.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      `/new-patient-time?ageGroup=${encodeURIComponent(ageGroup)}`,
-      "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite. Be as descript as you would like.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
+  sayMessage(
+    twiml,
+    "What days or times usually work best for you for a consultation?"
+  );
 
-  const gather = twiml.gather({
+  twiml.gather({
     input: "speech",
     action: `/new-patient-name?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}`,
     method: "POST",
@@ -360,11 +250,6 @@ app.post("/new-patient-time", (req, res) => {
     speechModel: "phone_call",
     language: "en-US",
   });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What days or times usually work best for you for a consultation?"
-  );
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -376,19 +261,9 @@ app.post("/new-patient-name", (req, res) => {
   const preferredTimes = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (!preferredTimes || preferredTimes.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      `/new-patient-name?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}`,
-      "What days or times usually work best for you for a consultation?",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
+  sayMessage(twiml, "Please say the patient's first and last name.");
 
-  const gather = twiml.gather({
+  twiml.gather({
     input: "speech",
     action: `/new-patient-finish?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}&preferredTimes=${encodeURIComponent(preferredTimes)}`,
     method: "POST",
@@ -397,11 +272,6 @@ app.post("/new-patient-name", (req, res) => {
     speechModel: "phone_call",
     language: "en-US",
   });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please say the patient's first and last name."
-  );
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -413,19 +283,6 @@ app.post("/new-patient-finish", async (req, res) => {
   const preferredTimes = req.query.preferredTimes || "";
   const patientName = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
-
-  if (!patientName || patientName.length < 2) {
-    const twiml = new twilio.twiml.VoiceResponse();
-    repeatIfNoInput(
-      twiml,
-      `/new-patient-finish?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}&preferredTimes=${encodeURIComponent(preferredTimes)}`,
-      "Please say the patient's first and last name.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
 
   await safeText(
     officeLineTextNumber,
@@ -465,7 +322,7 @@ app.post("/comfort-visit-issue", (req, res) => {
 
   sayMessage(
     twiml,
-    "Please tell me the issue. For example pokey wire, broken bracket, loose band, pain, swelling, or trauma. Be as descript as you would like."
+    "Please tell me the issue. For example pokey wire, broken bracket, loose band, pain, swelling, or trauma."
   );
 
   twiml.gather({
@@ -486,18 +343,6 @@ app.post("/comfort-visit-issue", (req, res) => {
 app.post("/comfort-visit-urgency", (req, res) => {
   const issue = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
-
-  if (!issue || issue.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      "/comfort-visit-urgency",
-      "Please tell me the issue. For example pokey wire, broken bracket, loose band, pain, swelling, or trauma. Be as descript as you would like.",
-      "pokey wire, broken bracket, loose band, pain, swelling, trauma",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
 
   sayMessage(
     twiml,
@@ -524,18 +369,6 @@ app.post("/comfort-visit-name", (req, res) => {
   const urgency = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (!urgency || urgency.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      `/comfort-visit-name?issue=${encodeURIComponent(issue)}`,
-      "Would you describe this as mild discomfort, urgent, or an emergency?",
-      "mild discomfort, urgent, emergency",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   sayMessage(twiml, "Please say the patient's first and last name.");
 
   twiml.gather({
@@ -558,19 +391,6 @@ app.post("/comfort-visit-finish", async (req, res) => {
   const patientName = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  if (!patientName || patientName.length < 2) {
-    const twiml = new twilio.twiml.VoiceResponse();
-    repeatIfNoInput(
-      twiml,
-      `/comfort-visit-finish?issue=${encodeURIComponent(issue)}&urgency=${encodeURIComponent(urgency)}`,
-      "Please say the patient's first and last name.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   await safeText(
     officeLineTextNumber,
     `COMFORT VISIT
@@ -581,6 +401,26 @@ Urgency: ${urgency}
 Next step: Text or call- offer comfort visit`
   );
 
+  let patientText =
+    `Thanks for calling Messenger Orthodontics. We received your message and a team member will text you shortly.`;
+
+  const lowerUrgency = urgency.toLowerCase();
+  const lowerIssue = issue.toLowerCase();
+
+  if (
+    lowerUrgency.includes("emergency") ||
+    lowerIssue.includes("trauma") ||
+    lowerIssue.includes("bleeding") ||
+    lowerIssue.includes("swelling")
+  ) {
+    patientText =
+      `Thanks for calling Messenger Orthodontics. For emergencies like trauma, bleeding, or swelling, Dr. Messenger is always available on her cell phone at (714) 500-7127. We have also sent your message to our team and someone will text you shortly.`;
+  }
+
+  if (callerNumber) {
+    await safeText(callerNumber, patientText);
+  }
+
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your message to our team.");
   twiml.redirect("/anything-else");
@@ -589,25 +429,49 @@ Next step: Text or call- offer comfort visit`
   res.send(twiml.toString());
 });
 
-// ===== SCHEDULE APPOINTMENT FLOW =====
-app.post("/schedule-appt-type", (req, res) => {
+// ===== SCHEDULE / RESCHEDULE FLOW =====
+app.post("/schedule-type", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
   sayMessage(
     twiml,
-    "What type of appointment would you like to schedule? For example a regular adjustment appointment, an observation or check appointment, a short visit, or something else."
+    "Are you trying to schedule a new appointment or reschedule an existing appointment?"
   );
 
   twiml.gather({
     input: "speech",
-    action: "/schedule-name",
+    action: "/schedule-visit-kind",
+    method: "POST",
+    speechTimeout: "auto",
+    enhanced: true,
+    speechModel: "phone_call",
+    language: "en-US",
+    hints: "schedule, new appointment, reschedule, existing appointment",
+  });
+
+  res.type("text/xml");
+  res.send(twiml.toString());
+});
+
+app.post("/schedule-visit-kind", (req, res) => {
+  const scheduleType = normalizeSpeech(req.body.SpeechResult);
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  sayMessage(
+    twiml,
+    "If this is a new appointment, is this for a regular adjustment appointment, an observation or check appointment, a short visit, or something else? If this is a reschedule please note that there is a 40 dollar cancellation fee for any missed or cancelled appointments within 48 hours of appointment."
+  );
+
+  twiml.gather({
+    input: "speech",
+    action: `/schedule-name?scheduleType=${encodeURIComponent(scheduleType)}`,
     method: "POST",
     speechTimeout: "auto",
     enhanced: true,
     speechModel: "phone_call",
     language: "en-US",
     hints:
-      "regular adjustment appointment, observation appointment, retainer check, or something else",
+      "regular adjustment appointment, observation appointment, check appointment, short visit, something else",
   });
 
   res.type("text/xml");
@@ -615,26 +479,15 @@ app.post("/schedule-appt-type", (req, res) => {
 });
 
 app.post("/schedule-name", (req, res) => {
+  const scheduleType = req.query.scheduleType || "";
   const visitKind = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
-
-  if (!visitKind || visitKind.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      "/schedule-name",
-      "What type of appointment would you like to schedule? For example a regular adjustment appointment, an observation or check appointment, a short visit, or something else.",
-      "regular adjustment appointment, observation appointment, retainer check, or something else",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
 
   sayMessage(twiml, "Please say the patient's first and last name.");
 
   twiml.gather({
     input: "speech",
-    action: `/schedule-preferred-time?visitKind=${encodeURIComponent(visitKind)}`,
+    action: `/schedule-preferred-time?scheduleType=${encodeURIComponent(scheduleType)}&visitKind=${encodeURIComponent(visitKind)}`,
     method: "POST",
     speechTimeout: "auto",
     enhanced: true,
@@ -647,27 +500,16 @@ app.post("/schedule-name", (req, res) => {
 });
 
 app.post("/schedule-preferred-time", (req, res) => {
+  const scheduleType = req.query.scheduleType || "";
   const visitKind = req.query.visitKind || "";
   const patientName = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
-
-  if (!patientName || patientName.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      `/schedule-preferred-time?visitKind=${encodeURIComponent(visitKind)}`,
-      "Please say the patient's first and last name.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
 
   sayMessage(twiml, "What days or times work best for you?");
 
   twiml.gather({
     input: "speech",
-    action: `/schedule-finish?visitKind=${encodeURIComponent(visitKind)}&patientName=${encodeURIComponent(patientName)}`,
+    action: `/schedule-finish?scheduleType=${encodeURIComponent(scheduleType)}&visitKind=${encodeURIComponent(visitKind)}&patientName=${encodeURIComponent(patientName)}`,
     method: "POST",
     speechTimeout: "auto",
     enhanced: true,
@@ -680,158 +522,29 @@ app.post("/schedule-preferred-time", (req, res) => {
 });
 
 app.post("/schedule-finish", async (req, res) => {
+  const scheduleType = req.query.scheduleType || "";
   const visitKind = req.query.visitKind || "";
   const patientName = req.query.patientName || "";
   const preferredTimes = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  if (!preferredTimes || preferredTimes.length < 2) {
-    const twiml = new twilio.twiml.VoiceResponse();
-    repeatIfNoInput(
-      twiml,
-      `/schedule-finish?visitKind=${encodeURIComponent(visitKind)}&patientName=${encodeURIComponent(patientName)}`,
-      "What days or times work best for you?",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   await safeText(
     officeLineTextNumber,
-    `SCHEDULE APPOINTMENT
+    `SCHEDULE / RESCHEDULE
 Name: ${patientName}
 Caller: ${callerNumber}
-Appointment type: ${visitKind}
+Request type: ${scheduleType}
+Visit type: ${visitKind}
 Preferred days/times: ${preferredTimes}
-Next step: Text or call with appointment options`
+Next step: Text appointment options`
   );
 
-  const twiml = new twilio.twiml.VoiceResponse();
-  sayMessage(twiml, "Thank you. I have sent your request to our team.");
-  twiml.redirect("/anything-else");
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-});
-
-// ===== RESCHEDULE APPOINTMENT FLOW =====
-app.post("/reschedule-protocol", (req, res) => {
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  sayMessage(
-    twiml,
-    "Please note there is a 40 dollar fee for missed or cancelled appointments within 48 hours of your appointment. We would like to get you back on the schedule as soon as possible. What was the reason for the cancellation?"
-  );
-
-  twiml.gather({
-    input: "speech",
-    action: "/reschedule-name",
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-});
-
-app.post("/reschedule-name", (req, res) => {
-  const cancellationReason = normalizeSpeech(req.body.SpeechResult);
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  if (!cancellationReason || cancellationReason.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      "/reschedule-name",
-      "Please note there is a 40 dollar fee for missed or cancelled appointments within 48 hours of your appointment. We would like to get you back on the schedule as soon as possible. What was the reason for the cancellation?",
-      "",
-      "speech"
+  if (callerNumber) {
+    await safeText(
+      callerNumber,
+      `Thanks for calling Messenger Orthodontics. We received your scheduling request and a team member will text you shortly.`
     );
-    res.type("text/xml");
-    return res.send(twiml.toString());
   }
-
-  sayMessage(twiml, "Please say the patient's first and last name.");
-
-  twiml.gather({
-    input: "speech",
-    action: `/reschedule-preferred-time?cancellationReason=${encodeURIComponent(cancellationReason)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-});
-
-app.post("/reschedule-preferred-time", (req, res) => {
-  const cancellationReason = req.query.cancellationReason || "";
-  const patientName = normalizeSpeech(req.body.SpeechResult);
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  if (!patientName || patientName.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      `/reschedule-preferred-time?cancellationReason=${encodeURIComponent(cancellationReason)}`,
-      "Please say the patient's first and last name.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
-  sayMessage(twiml, "What days or times work best for you?");
-
-  twiml.gather({
-    input: "speech",
-    action: `/reschedule-finish?cancellationReason=${encodeURIComponent(cancellationReason)}&patientName=${encodeURIComponent(patientName)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  res.type("text/xml");
-  res.send(twiml.toString());
-});
-
-app.post("/reschedule-finish", async (req, res) => {
-  const cancellationReason = req.query.cancellationReason || "";
-  const patientName = req.query.patientName || "";
-  const preferredTimes = normalizeSpeech(req.body.SpeechResult);
-  const callerNumber = formatPhoneNumber(req.body.From || "");
-
-  if (!preferredTimes || preferredTimes.length < 2) {
-    const twiml = new twilio.twiml.VoiceResponse();
-    repeatIfNoInput(
-      twiml,
-      `/reschedule-finish?cancellationReason=${encodeURIComponent(cancellationReason)}&patientName=${encodeURIComponent(patientName)}`,
-      "What days or times work best for you?",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
-  await safeText(
-    officeLineTextNumber,
-    `RESCHEDULE APPOINTMENT
-Name: ${patientName}
-Caller: ${callerNumber}
-Reason for cancellation: ${cancellationReason}
-Preferred days/times: ${preferredTimes}
-Next step: Text rescheduling options and reappoint as soon as possible- reinterate need to come in ASAP to keep treatment on track`
-  );
 
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your request to our team.");
@@ -868,18 +581,6 @@ app.post("/other-name", (req, res) => {
   const reason = normalizeSpeech(req.body.SpeechResult);
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (!reason || reason.length < 2) {
-    repeatIfNoInput(
-      twiml,
-      "/other-name",
-      "Please briefly tell me the reason for your call.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   sayMessage(twiml, "Please say your first and last name.");
 
   twiml.gather({
@@ -901,19 +602,6 @@ app.post("/other-finish", async (req, res) => {
   const patientName = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  if (!patientName || patientName.length < 2) {
-    const twiml = new twilio.twiml.VoiceResponse();
-    repeatIfNoInput(
-      twiml,
-      `/other-finish?reason=${encodeURIComponent(reason)}`,
-      "Please say your first and last name.",
-      "",
-      "speech"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   await safeText(
     officeLineTextNumber,
     `OTHER CALL
@@ -922,6 +610,13 @@ Caller: ${callerNumber}
 Reason: ${reason}
 Next step: Text follow-up`
   );
+
+  if (callerNumber) {
+    await safeText(
+      callerNumber,
+      `Thanks for calling Messenger Orthodontics. We received your message and a team member will text you shortly.`
+    );
+  }
 
   const twiml = new twilio.twiml.VoiceResponse();
   sayMessage(twiml, "Thank you. I have sent your message to our team.");
@@ -961,18 +656,6 @@ app.post("/anything-else-handle", (req, res) => {
   const answer = (req.body.SpeechResult || req.body.Digits || "").toLowerCase();
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (!answer || !answer.trim()) {
-    repeatIfNoInput(
-      twiml,
-      "/anything-else-handle",
-      "Is there anything else I can help you with? Please say yes or no.",
-      "yes, no",
-      "speech dtmf"
-    );
-    res.type("text/xml");
-    return res.send(twiml.toString());
-  }
-
   if (answer.includes("yes") || answer === "1") {
     twiml.redirect("/main-menu-only");
   } else {
@@ -983,7 +666,6 @@ app.post("/anything-else-handle", (req, res) => {
   res.type("text/xml");
   res.send(twiml.toString());
 });
-
 
 // ===== SERVER =====
 const PORT = 5050;

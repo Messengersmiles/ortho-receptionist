@@ -1,0 +1,13 @@
+{
+  "name": "ortho-receptionist",
+  "version": "1.0.0",
+  "description": "AI Receptionist",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "twilio": "^5.3.6"
+  }
+}

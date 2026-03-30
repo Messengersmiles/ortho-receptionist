@@ -272,38 +272,31 @@ app.post("/handle-main-menu", (req, res) => {
 app.post("/new-patient-age-group", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  // ✅ FIRST TIME (no speech yet)
   if (!req.body.SpeechResult) {
-    sayMessage(
-      twiml,
+    const gather = twiml.gather({
+      input: "speech",
+      action: "/new-patient-age-group",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "child, teenager, adult",
+    });
+
+    gather.say(
+      { voice: "Google.en-US-Wavenet-F" },
       "Great. We are excited to meet you. Is this consultation for a child, teenager, or adult?"
     );
 
-    twiml.gather({
-      input: "speech",
-      action: "/new-patient-age-group",
-      method: "POST",
-      speechTimeout: "auto",
-      enhanced: true,
-      speechModel: "phone_call",
-      language: "en-US",
-      hints: "child, teenager, adult",
-    });
-
     res.type("text/xml");
     return res.send(twiml.toString());
   }
 
-  // ✅ SECOND TIME (user responded)
   const input = normalizeSpeech(req.body.SpeechResult);
 
   if (!input || input.length < 2) {
-    sayMessage(
-      twiml,
-      "I did not catch that. Please say child, teenager, or adult."
-    );
-
-    twiml.gather({
+    const gather = twiml.gather({
       input: "speech",
       action: "/new-patient-age-group",
       method: "POST",
@@ -314,17 +307,16 @@ app.post("/new-patient-age-group", (req, res) => {
       hints: "child, teenager, adult",
     });
 
+    gather.say(
+      { voice: "Google.en-US-Wavenet-F" },
+      "I didn't catch that, can you please repeat. Is this consultation for a child, teenager, or adult?"
+    );
+
     res.type("text/xml");
     return res.send(twiml.toString());
   }
 
-  // ✅ GOOD INPUT → move on
-  sayMessage(
-    twiml,
-    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite. Be as desript as you would like."
-  );
-
-  twiml.gather({
+  const gather = twiml.gather({
     input: "speech",
     action: `/new-patient-time?ageGroup=${encodeURIComponent(input)}`,
     method: "POST",
@@ -333,6 +325,11 @@ app.post("/new-patient-age-group", (req, res) => {
     speechModel: "phone_call",
     language: "en-US",
   });
+
+  gather.say(
+    { voice: "Google.en-US-Wavenet-F" },
+    "What is the patient's main concern today? For example braces, Invisalign, new retainers, crowding, spacing, or bite. Be as descript as you would like."
+  );
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -355,12 +352,7 @@ app.post("/new-patient-time", (req, res) => {
     return res.send(twiml.toString());
   }
 
-  sayMessage(
-    twiml,
-    "What days or times usually work best for you for a consultation?"
-  );
-
-  twiml.gather({
+  const gather = twiml.gather({
     input: "speech",
     action: `/new-patient-name?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}`,
     method: "POST",
@@ -369,6 +361,11 @@ app.post("/new-patient-time", (req, res) => {
     speechModel: "phone_call",
     language: "en-US",
   });
+
+  gather.say(
+    { voice: "Google.en-US-Wavenet-F" },
+    "What days or times usually work best for you for a consultation?"
+  );
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -392,9 +389,7 @@ app.post("/new-patient-name", (req, res) => {
     return res.send(twiml.toString());
   }
 
-  sayMessage(twiml, "Please say the patient's first and last name.");
-
-  twiml.gather({
+  const gather = twiml.gather({
     input: "speech",
     action: `/new-patient-finish?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}&preferredTimes=${encodeURIComponent(preferredTimes)}`,
     method: "POST",
@@ -403,6 +398,11 @@ app.post("/new-patient-name", (req, res) => {
     speechModel: "phone_call",
     language: "en-US",
   });
+
+  gather.say(
+    { voice: "Google.en-US-Wavenet-F" },
+    "Please say the patient's first and last name."
+  );
 
   res.type("text/xml");
   res.send(twiml.toString());

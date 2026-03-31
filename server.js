@@ -17,22 +17,46 @@ const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 // ===== HELPERS =====
 function formatPhoneNumber(number) {
   if (!number) return "";
-  const cleaned = String(number).replace(/\D/g, "");
-  if (cleaned.length === 10) return `+1${cleaned}`;
-  if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
-  if (String(number).startsWith("+")) return String(number);
-  return `+${cleaned}`;
+
+  const raw = String(number).trim();
+
+  // already valid E.164 like +17149420707
+  if (/^\+\d{10,15}$/.test(raw)) {
+    return raw;
+  }
+
+  const cleaned = raw.replace(/\D/g, "");
+
+  // US 10-digit number
+  if (cleaned.length === 10) {
+    return `+1${cleaned}`;
+  }
+
+  // US 11-digit number starting with 1
+  if (cleaned.length === 11 && cleaned.startsWith("1")) {
+    return `+${cleaned}`;
+  }
+
+  // anything else is invalid
+  return "";
 }
 
 async function safeText(to, body) {
   try {
-    if (!to || !body) return;
+    const formattedTo = formatPhoneNumber(to);
+
+    if (!formattedTo || !body) {
+      console.log("Skipping text - invalid number:", to);
+      return;
+    }
+
     await client.messages.create({
       body,
       from: twilioNumber,
-      to: formatPhoneNumber(to),
+      to: formattedTo,
     });
-    console.log(`Text sent to ${to}`);
+
+    console.log(`Text sent to ${formattedTo}`);
   } catch (err) {
     console.error(`Failed to text ${to}:`, err.message);
   }
@@ -300,7 +324,7 @@ app.post("/new-patient-concern", (req, res) => {
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
-    "What is the patient's main concern today? For example braces, Invisalign, crowding, spacing, or bite."
+    "What is the patient's main concern today? For example braces, Invisaline, crowding, spacing, or bite."
   );
 
   res.type("text/xml");
@@ -930,7 +954,7 @@ app.post("/anything-else-handle", (req, res) => {
 });
 
 // ===== SERVER =====
-const PORT = 5050;
+const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

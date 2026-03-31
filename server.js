@@ -108,6 +108,27 @@ function yesNoValue(input) {
 function classifyMenuChoice(input) {
   const text = (input || "").toLowerCase().trim();
 
+  // 🔥 CHECK RESCHEDULE FIRST (MOST IMPORTANT FIX)
+  if (
+    text === "4" ||
+    text.includes("four") ||
+    text.includes("reschedule") ||
+    text.includes("change appointment") ||
+    text.includes("move appointment")
+  ) {
+    return "reschedule";
+  }
+
+  if (
+    text === "3" ||
+    text.includes("three") ||
+    text.includes("schedule") ||
+    text.includes("book appointment") ||
+    text.includes("make appointment")
+  ) {
+    return "schedule";
+  }
+
   if (
     text === "1" ||
     text.includes("one") ||
@@ -129,23 +150,6 @@ function classifyMenuChoice(input) {
     text.includes("pain")
   ) {
     return "comfort-visit";
-  }
-
-  if (
-    text === "3" ||
-    text.includes("three") ||
-    text.includes("schedule") ||
-    text.includes("appointment")
-  ) {
-    return "schedule";
-  }
-
-  if (
-    text === "4" ||
-    text.includes("four") ||
-    text.includes("reschedule")
-  ) {
-    return "reschedule";
   }
 
   if (

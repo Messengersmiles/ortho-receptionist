@@ -339,7 +339,7 @@ if (isLunchHour()) {
 } else {
   sayMessage(
     twiml,
-    "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information now so we can help you more quickly. How can I help you today?"
+    "Hi, welcome to Messenger Orthodontics. We are either on the other line or helping another patient, but I can start helping you now by gathering a little information so we can get back to you as quickly as possible. The team will be immediatly informed of your call. How can I help you today?"
   );
 }
 

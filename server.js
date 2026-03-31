@@ -332,16 +332,15 @@ app.post("/voice", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
   if (isLunchHour()) {
-    sayMessage(
-      twiml,
-      "Hello, thank you for calling Messenger Orthodontics. We are away from the desk for lunch, but I can gather information for you and a team member will get back to you shortly."
-    );
+   sayMessage(
+  twiml,
+  "Hi, thank you for calling Messenger Orthodontics. Our team is away from the desk for lunch, but I can start helping you now by gathering a little information so we can take care of you more quickly when we return. How can I help you today?"
+);
   } else {
-    sayMessage(
-      twiml,
-      "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
-    );
-  }
+   sayMessage(
+  twiml,
+  "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information now so we can help you more quickly. How can I help you today?"
+);
 
   buildMainMenu(twiml, "/voice");
 

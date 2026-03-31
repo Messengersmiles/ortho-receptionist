@@ -14,6 +14,13 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 
+const OFFICE_TIMEZONE = "America/Los_Angeles";
+
+// Set to "A" or "B" if you ever want to force the Tuesday lunch pattern manually.
+// Leave as null to let it auto-calculate the A/B pattern.
+// A starts Tuesday March 31, 2026.
+const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
+
 // ===== HELPERS =====
 function formatPhoneNumber(number) {
   if (!number) return "";
@@ -218,14 +225,100 @@ function repeatSpeechOrDtmfQuestion(twiml, question, action, hints = "") {
   gather.say({ voice: "Google.en-US-Wavenet-F" }, question);
 }
 
+function getPartsInTimeZone(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const map = {};
+
+  for (const part of parts) {
+    if (part.type !== "literal") {
+      map[part.type] = part.value;
+    }
+  }
+
+  return {
+    weekday: map.weekday,
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+  };
+}
+
+function getTuesdayLunchPattern(now = new Date()) {
+  if (TUESDAY_LUNCH_PATTERN_OVERRIDE === "A" || TUESDAY_LUNCH_PATTERN_OVERRIDE === "B") {
+    return TUESDAY_LUNCH_PATTERN_OVERRIDE;
+  }
+
+  // First A Tuesday starts tomorrow: March 31, 2026
+  const anchorTuesdayUtc = new Date("2026-03-31T12:00:00Z");
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const diffMs = now.getTime() - anchorTuesdayUtc.getTime();
+  const weeksFromAnchor = Math.floor(diffMs / msPerWeek);
+
+  return Math.abs(weeksFromAnchor) % 2 === 0 ? "A" : "B";
+}
+
+function isWithinTimeRange(currentMinutes, startHour, startMinute, endHour, endMinute) {
+  const start = startHour * 60 + startMinute;
+  const end = endHour * 60 + endMinute;
+  return currentMinutes >= start && currentMinutes < end;
+}
+
+function isLunchHour(now = new Date()) {
+  const parts = getPartsInTimeZone(now, OFFICE_TIMEZONE);
+  const currentMinutes = parts.hour * 60 + parts.minute;
+
+  // Mon = 1:00 PM to 1:40 PM
+  if (parts.weekday === "Mon") {
+    return isWithinTimeRange(currentMinutes, 13, 0, 13, 40);
+  }
+
+  // Tue alternating A/B
+  if (parts.weekday === "Tue") {
+    const pattern = getTuesdayLunchPattern(now);
+
+    if (pattern === "A") {
+      return isWithinTimeRange(currentMinutes, 13, 0, 13, 40);
+    }
+
+    return isWithinTimeRange(currentMinutes, 12, 0, 13, 30);
+  }
+
+  // Wed and Thu = 12:00 PM to 1:30 PM
+  if (parts.weekday === "Wed" || parts.weekday === "Thu") {
+    return isWithinTimeRange(currentMinutes, 12, 0, 13, 30);
+  }
+
+  return false;
+}
+
 // ===== MAIN MENU =====
 app.post("/voice", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  sayMessage(
-    twiml,
-    "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
-  );
+  if (isLunchHour()) {
+    sayMessage(
+      twiml,
+      "Hello, thank you for calling Messenger Orthodontics. We are away from the desk for lunch, but I can gather information for you and a team member will get back to you shortly."
+    );
+  } else {
+    sayMessage(
+      twiml,
+      "Hi, welcome to Messenger Orthodontics. We are either helping another patient or on the other line, but I can gather your information and a team member will get back to you. How can I help you today?"
+    );
+  }
 
   buildMainMenu(twiml);
 

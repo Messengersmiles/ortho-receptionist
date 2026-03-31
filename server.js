@@ -161,24 +161,37 @@ function classifyMenuChoice(input) {
   return "";
 }
 
-function buildMainMenu(twiml) {
-  const gather = twiml.gather({
-    input: "speech dtmf",
-    action: "/handle-main-menu",
-    method: "POST",
-    timeout: 4,
-    numDigits: 1,
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints:
-      "new patient consultation, comfort visit, pokey wire, broken bracket, schedule appointment, reschedule appointment, other questions",
-  });
+function gatherWithFallback(twiml, options, message, redirectUrl) {
+  const gather = twiml.gather(options);
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
-    "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 to schedule an appointment, 4 to reschedule an existing appointment, or 5 for any other questions."
+    message
+  );
+
+  twiml.redirect(redirectUrl);
+
+  return gather;
+}
+
+function buildMainMenu(twiml, redirectUrl) {
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech dtmf",
+      action: "/handle-main-menu",
+      method: "POST",
+      timeout: 4,
+      numDigits: 1,
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints:
+        "new patient consultation, comfort visit, pokey wire, broken bracket, schedule appointment, reschedule appointment, other questions",
+    },
+    "You can say or press 1 for new patient consultation, 2 for comfort visit, 3 to schedule an appointment, 4 to reschedule an existing appointment, or 5 for any other questions.",
+    redirectUrl
   );
 }
 
@@ -192,37 +205,43 @@ function hasSpeechOrDigits(req) {
 function repeatSpeechQuestion(twiml, question, action, hints = "") {
   sayMessage(twiml, "I am sorry, I did not catch that.");
 
-  const gather = twiml.gather({
-    input: "speech",
-    action,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    ...(hints ? { hints } : {}),
-  });
-
-  gather.say({ voice: "Google.en-US-Wavenet-F" }, question);
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      ...(hints ? { hints } : {}),
+    },
+    question,
+    action
+  );
 }
 
 function repeatSpeechOrDtmfQuestion(twiml, question, action, hints = "") {
   sayMessage(twiml, "I am sorry, I did not catch that.");
 
-  const gather = twiml.gather({
-    input: "speech dtmf",
-    action,
-    method: "POST",
-    numDigits: 1,
-    timeout: 4,
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    ...(hints ? { hints } : {}),
-  });
-
-  gather.say({ voice: "Google.en-US-Wavenet-F" }, question);
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech dtmf",
+      action,
+      method: "POST",
+      numDigits: 1,
+      timeout: 4,
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      ...(hints ? { hints } : {}),
+    },
+    question,
+    action
+  );
 }
 
 function getPartsInTimeZone(date, timeZone) {
@@ -320,7 +339,7 @@ app.post("/voice", (req, res) => {
     );
   }
 
-  buildMainMenu(twiml);
+  buildMainMenu(twiml, "/voice");
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -330,7 +349,7 @@ app.post("/voice", (req, res) => {
 app.post("/main-menu-only", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  buildMainMenu(twiml);
+  buildMainMenu(twiml, "/main-menu-only");
 
   res.type("text/xml");
   res.send(twiml.toString());
@@ -343,7 +362,7 @@ app.post("/handle-main-menu", (req, res) => {
 
   if (!hasSpeechOrDigits(req) || !route) {
     sayMessage(twiml, "I am sorry, I did not catch that.");
-    buildMainMenu(twiml);
+    buildMainMenu(twiml, "/main-menu-only");
     res.type("text/xml");
     return res.send(twiml.toString());
   }
@@ -368,20 +387,20 @@ app.post("/handle-main-menu", (req, res) => {
 app.post("/new-patient-age-group", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: "/new-patient-concern",
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: "child, teen, adult",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Awesome. We are excited to meet you. Is this consultation for a child, teen, or adult?"
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: "/new-patient-concern",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "child, teen, adult",
+    },
+    "Awesome. We are excited to meet you. Is this consultation for a child, teen, or adult?",
+    "/new-patient-age-group"
   );
 
   res.type("text/xml");
@@ -404,20 +423,20 @@ app.post("/new-patient-concern", (req, res) => {
 
   const ageGroup = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/new-patient-time?ageGroup=${encodeURIComponent(ageGroup)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: "braces, invisalign, crowding, spacing, bite",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What is the patient's main concern today? For example braces, Invisaline, crowding, spacing, or bite."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/new-patient-time?ageGroup=${encodeURIComponent(ageGroup)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "braces, invisalign, crowding, spacing, bite",
+    },
+    "What is the patient's main concern today? For example braces, Invisaline, crowding, spacing, or bite.",
+    `/new-patient-concern`
   );
 
   res.type("text/xml");
@@ -441,19 +460,19 @@ app.post("/new-patient-time", (req, res) => {
 
   const concern = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/new-patient-name?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What days or times usually work best for you for a consultation?"
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/new-patient-name?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "What days or times usually work best for you for a consultation?",
+    `/new-patient-time?ageGroup=${encodeURIComponent(ageGroup)}`
   );
 
   res.type("text/xml");
@@ -477,19 +496,19 @@ app.post("/new-patient-name", (req, res) => {
 
   const preferredTimes = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/new-patient-finish?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}&preferredTimes=${encodeURIComponent(preferredTimes)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please say the patient's first and last name."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/new-patient-finish?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}&preferredTimes=${encodeURIComponent(preferredTimes)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "Please say the patient's first and last name.",
+    `/new-patient-name?ageGroup=${encodeURIComponent(ageGroup)}&concern=${encodeURIComponent(concern)}`
   );
 
   res.type("text/xml");
@@ -515,16 +534,16 @@ app.post("/new-patient-finish", async (req, res) => {
   const patientName = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  await safeText(
-    officeLineTextNumber,
-    `NEW PATIENT CONSULTATION
+await safeText(
+  officeLineTextNumber,
+  `🔥 NEW PATIENT CONSULTATION
 Name: ${patientName}
 Caller: ${callerNumber}
 Patient type: ${ageGroup}
 Main concern: ${concern}
 Preferred days/times: ${preferredTimes}
 Next step: Text consult options and call patient ASAP`
-  );
+);
 
   if (callerNumber) {
     await safeText(
@@ -550,20 +569,20 @@ A team member will also be reaching out shortly.`
 app.post("/comfort-visit-issue", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: "/comfort-visit-urgency",
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: "pokey wire, broken bracket, loose band, pain, swelling, trauma",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please tell me the issue. For example pokey wire, broken bracket, loose band, pain, swelling, or trauma."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: "/comfort-visit-urgency",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "pokey wire, broken bracket, loose band, pain, swelling, trauma",
+    },
+    "Please tell me the issue. For example pokey wire, broken bracket, loose band, pain, swelling, or trauma.",
+    "/comfort-visit-issue"
   );
 
   res.type("text/xml");
@@ -586,20 +605,20 @@ app.post("/comfort-visit-urgency", (req, res) => {
 
   const issue = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/comfort-visit-name?issue=${encodeURIComponent(issue)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: "mild discomfort, urgent, emergency",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Would you describe this as mild discomfort, urgent, or an emergency?"
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/comfort-visit-name?issue=${encodeURIComponent(issue)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "mild discomfort, urgent, emergency",
+    },
+    "Would you describe this as mild discomfort, urgent, or an emergency?",
+    "/comfort-visit-urgency"
   );
 
   res.type("text/xml");
@@ -623,19 +642,19 @@ app.post("/comfort-visit-name", (req, res) => {
 
   const urgency = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/comfort-visit-finish?issue=${encodeURIComponent(issue)}&urgency=${encodeURIComponent(urgency)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please say the patient's first and last name."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/comfort-visit-finish?issue=${encodeURIComponent(issue)}&urgency=${encodeURIComponent(urgency)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "Please say the patient's first and last name.",
+    `/comfort-visit-name?issue=${encodeURIComponent(issue)}`
   );
 
   res.type("text/xml");
@@ -661,14 +680,14 @@ app.post("/comfort-visit-finish", async (req, res) => {
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
   await safeText(
-    officeLineTextNumber,
-    `COMFORT VISIT
+  officeLineTextNumber,
+  `🚨 COMFORT VISIT
 Name: ${patientName}
 Caller: ${callerNumber}
 Issue: ${issue}
 Urgency: ${urgency}
-Next step: Text or call- offer comfort visit`
-  );
+Next step: Text or call ASAP- offer ASAP times for CV`
+);
 
   sayMessage(twiml, "Thank you. I have sent your message to our team.");
   twiml.redirect("/anything-else");
@@ -681,21 +700,21 @@ Next step: Text or call- offer comfort visit`
 app.post("/schedule-appointment-type", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: "/schedule-appointment-name",
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints:
-      "adjustment appointment, observation appointment, check appointment, short visit, consultation, retainer check",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What type of appointment would you like to schedule? For example adjustment appointment, observation, retainer check, or something else."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: "/schedule-appointment-name",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints:
+        "adjustment appointment, observation appointment, check appointment, short visit, consultation, retainer check",
+    },
+    "What type of appointment would you like to schedule? For example adjustment appointment, observation, retainer check, or something else.",
+    "/schedule-appointment-type"
   );
 
   res.type("text/xml");
@@ -718,19 +737,19 @@ app.post("/schedule-appointment-name", (req, res) => {
 
   const appointmentType = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/schedule-appointment-preferred-times?appointmentType=${encodeURIComponent(appointmentType)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please say the patient's first and last name."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/schedule-appointment-preferred-times?appointmentType=${encodeURIComponent(appointmentType)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "Please say the patient's first and last name.",
+    "/schedule-appointment-name"
   );
 
   res.type("text/xml");
@@ -753,19 +772,19 @@ app.post("/schedule-appointment-preferred-times", (req, res) => {
 
   const patientName = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/schedule-appointment-finish?appointmentType=${encodeURIComponent(appointmentType)}&patientName=${encodeURIComponent(patientName)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What days and times work best for you?"
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/schedule-appointment-finish?appointmentType=${encodeURIComponent(appointmentType)}&patientName=${encodeURIComponent(patientName)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "What days and times work best for you?",
+    `/schedule-appointment-preferred-times?appointmentType=${encodeURIComponent(appointmentType)}`
   );
 
   res.type("text/xml");
@@ -790,15 +809,15 @@ app.post("/schedule-appointment-finish", async (req, res) => {
   const preferredTimes = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  await safeText(
-    officeLineTextNumber,
-    `SCHEDULE APPOINTMENT
+await safeText(
+  officeLineTextNumber,
+  `📅 SCHEDULE APPOINTMENT
 Name: ${patientName}
 Caller: ${callerNumber}
 Appointment type: ${appointmentType}
 Preferred days/times: ${preferredTimes}
 Next step: Contact patient with appointment options`
-  );
+);
 
   sayMessage(twiml, "Thank you. I have sent your request to our team.");
   twiml.redirect("/anything-else");
@@ -811,19 +830,19 @@ Next step: Contact patient with appointment options`
 app.post("/reschedule-name", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: "/reschedule-preferred-times",
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Any missed or cancelled appointments within 48 hours of appointment time will be subject to a 40 dollar fee. We would like to get you back in as soon as possible. Please say the patient's first and last name."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: "/reschedule-preferred-times",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "Any missed or cancelled appointments within 48 hours of appointment time will be subject to a 40 dollar fee. We would like to get you back in as soon as possible. Please say the patient's first and last name.",
+    "/reschedule-name"
   );
 
   res.type("text/xml");
@@ -845,19 +864,19 @@ app.post("/reschedule-preferred-times", (req, res) => {
 
   const patientName = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/reschedule-finish?patientName=${encodeURIComponent(patientName)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "What days and times work best for you?"
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/reschedule-finish?patientName=${encodeURIComponent(patientName)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "What days and times work best for you?",
+    "/reschedule-preferred-times"
   );
 
   res.type("text/xml");
@@ -881,14 +900,14 @@ app.post("/reschedule-finish", async (req, res) => {
   const preferredTimes = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  await safeText(
-    officeLineTextNumber,
-    `RESCHEDULE APPOINTMENT
+await safeText(
+  officeLineTextNumber,
+  `🔄 RESCHEDULE APPOINTMENT
 Name: ${patientName}
 Caller: ${callerNumber}
 Preferred days/times: ${preferredTimes}
-Next step: Contact patient as soon as possible to reschedule`
-  );
+Next step: Contact patient with ASAP times/dates to reschedule`
+);
 
   sayMessage(twiml, "Thank you. I have sent your request to our team.");
   twiml.redirect("/anything-else");
@@ -901,19 +920,19 @@ Next step: Contact patient as soon as possible to reschedule`
 app.post("/other-reason", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: "/other-name",
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please tell me your question."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: "/other-name",
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "Please tell me your question.",
+    "/other-reason"
   );
 
   res.type("text/xml");
@@ -935,19 +954,19 @@ app.post("/other-name", (req, res) => {
 
   const reason = normalizeSpeech(req.body.SpeechResult);
 
-  const gather = twiml.gather({
-    input: "speech",
-    action: `/other-finish?reason=${encodeURIComponent(reason)}`,
-    method: "POST",
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Please say your first and last name."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech",
+      action: `/other-finish?reason=${encodeURIComponent(reason)}`,
+      method: "POST",
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+    },
+    "Please say your first and last name.",
+    "/other-name"
   );
 
   res.type("text/xml");
@@ -971,14 +990,14 @@ app.post("/other-finish", async (req, res) => {
   const patientName = normalizeSpeech(req.body.SpeechResult);
   const callerNumber = formatPhoneNumber(req.body.From || "");
 
-  await safeText(
-    officeLineTextNumber,
-    `OTHER QUESTION
+await safeText(
+  officeLineTextNumber,
+  `❓ OTHER QUESTION
 Name: ${patientName}
 Caller: ${callerNumber}
 Question: ${reason}
 Next step: Follow up with patient`
-  );
+);
 
   sayMessage(twiml, "Thank you. I have sent your message to our team.");
   twiml.redirect("/anything-else");
@@ -991,22 +1010,22 @@ Next step: Follow up with patient`
 app.post("/anything-else", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
 
-  const gather = twiml.gather({
-    input: "speech dtmf",
-    action: "/anything-else-handle",
-    method: "POST",
-    numDigits: 1,
-    timeout: 4,
-    speechTimeout: "auto",
-    enhanced: true,
-    speechModel: "phone_call",
-    language: "en-US",
-    hints: "yes, no",
-  });
-
-  gather.say(
-    { voice: "Google.en-US-Wavenet-F" },
-    "Is there anything else I can help you with? Please say yes or no."
+  gatherWithFallback(
+    twiml,
+    {
+      input: "speech dtmf",
+      action: "/anything-else-handle",
+      method: "POST",
+      numDigits: 1,
+      timeout: 4,
+      speechTimeout: "auto",
+      enhanced: true,
+      speechModel: "phone_call",
+      language: "en-US",
+      hints: "yes, no",
+    },
+    "Is there anything else I can help you with? Please say yes or no.",
+    "/anything-else"
   );
 
   res.type("text/xml");

@@ -602,7 +602,7 @@ app.post("/schedule-appointment-type", (req, res) => {
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
-    "What type of appointment would you like to schedule? For example adjustment appointment, observation or check appointment, short visit, consultation, or something else."
+    "What type of appointment would you like to schedule? For example adjustment appointment, observation, retainer check, or something else."
   );
 
   res.type("text/xml");
@@ -615,9 +615,9 @@ app.post("/schedule-appointment-name", (req, res) => {
   if (!req.body.SpeechResult || !req.body.SpeechResult.trim()) {
     repeatSpeechQuestion(
       twiml,
-      "What type of appointment would you like to schedule? For example adjustment appointment, observation or check appointment, short visit, consultation, or something else.",
+      "What type of appointment would you like to schedule? For example adjustment appointment, observation, retainer check, or something else.",
       "/schedule-appointment-name",
-      "adjustment appointment, observation appointment, check appointment, short visit, consultation, retainer check"
+      "adjustment appointment, observation appointment, retainer check, or something else."
     );
     res.type("text/xml");
     return res.send(twiml.toString());

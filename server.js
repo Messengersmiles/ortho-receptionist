@@ -5,8 +5,8 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 
 // ===== CONFIG =====
-const accountSid = "YOUR_TWILIO_ACCOUNT_SID";
-const authToken = "YOUR_TWILIO_AUTH_TOKEN";
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
 const client = twilio(accountSid, authToken);
 
 const twilioNumber = "+17144770304";

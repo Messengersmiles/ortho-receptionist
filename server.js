@@ -955,23 +955,6 @@ app.post("/anything-else-handle", (req, res) => {
 
 // ===== SERVER =====
 const PORT = process.env.PORT || 5050;
-app.get("/test-text", async (req, res) => {
-  try {
-    console.log("TEST TEXT ROUTE HIT");
-
-    const msg = await client.messages.create({
-      body: "Test text from Render server",
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: "+17149420707"
-    });
-
-    console.log("TEXT SENT OK:", msg.sid);
-    res.send("Text sent: " + msg.sid);
-  } catch (err) {
-    console.error("TEST TEXT FAILED:", err.message, err.code);
-    res.status(500).send(`Failed: ${err.message} | code: ${err.code || "none"}`);
-  }
-});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

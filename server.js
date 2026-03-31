@@ -445,7 +445,7 @@ A team member will also be reaching out shortly.`
 
   sayMessage(
     twiml,
-    "Thank you. I have sent your information to our team, and we will text you shortly."
+    "Thank you. I have sent your information to our team, and we will get back to you shortly."
   );
   twiml.redirect("/anything-else");
 

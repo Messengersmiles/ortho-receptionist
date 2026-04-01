@@ -166,14 +166,15 @@ function classifyMenuChoice(input) {
 }
 
 function gatherWithFallback(twiml, options, message, redirectUrl) {
-  const gather = twiml.gather(options);
+  const gather = twiml.gather({
+    ...options,
+    actionOnEmptyResult: true,
+  });
 
   gather.say(
     { voice: "Google.en-US-Wavenet-F" },
     message
   );
-
-  twiml.redirect(redirectUrl);
 
   return gather;
 }

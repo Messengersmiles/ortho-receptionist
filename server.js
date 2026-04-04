@@ -314,10 +314,10 @@ function isLunchHour(now = new Date()) {
     const pattern = getTuesdayLunchPattern(now);
 
     if (pattern === "A") {
-      return isWithinTimeRange(currentMinutes, 13, 0, 13, 40);
+      return isWithinTimeRange(currentMinutes, 12, 0, 13, 30);
     }
 
-    return isWithinTimeRange(currentMinutes, 12, 0, 13, 30);
+    return isWithinTimeRange(currentMinutes, 13, 0, 13, 40);
   }
 
   // Wed and Thu = 12:00 PM to 1:30 PM

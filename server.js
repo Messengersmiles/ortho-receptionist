@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ server, path: "/conversation-relay" });
 // ===== CONFIG =====
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const publicHost = process.env.PUBLIC_HOST; // example: your-app.onrender.com (no https://)
+const publicHost = process.env.PUBLIC_HOST; // example: ortho-receptionist-uc4w.onrender.com
 const client = twilio(accountSid, authToken);
 
 const twilioNumber = "+17144770304";
@@ -23,8 +23,8 @@ const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
 
-// Melissa - Intimate, Calming, Light Rasp
-const ELEVENLABS_VOICE = "xYa75LlayhWHCRl1yJSH";
+// Riley
+const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
 
 // Set to "A" or "B" if you ever want to force the Tuesday lunch pattern manually.
 // Leave as null to let it auto-calculate the A/B pattern.
@@ -253,15 +253,17 @@ async function finalizeAndNotify(session, ws) {
 
   sendTextToken(
     ws,
-    "Perfect. I’ve passed your information to our team, and someone will follow up with you shortly."
+    "Perfect. I've passed your information to our team, and someone will follow up with you shortly."
   );
 
-  endConversation(ws, {
-    reason: "intake-complete",
-    callSid: session.callSid,
-    patientName: session.patientName,
-    intent: session.intent,
-  });
+  setTimeout(() => {
+    endConversation(ws, {
+      reason: "intake-complete",
+      callSid: session.callSid,
+      patientName: session.patientName,
+      intent: session.intent,
+    });
+  }, 2500);
 }
 
 // ===== INBOUND CALL WEBHOOK =====
@@ -275,8 +277,8 @@ app.post("/voice", (req, res) => {
     voice: ELEVENLABS_VOICE,
     interruptible: "speech",
     welcomeGreeting: isLunchHour()
-      ? "Hi, thank you for calling Messenger Orthodontics. Our team is away from the desk for lunch right now, but I’m a virtual receptionist and I can help take your message."
-      : "Hi, thank you for calling Messenger Orthodontics. Our team is currently with patients, but I’m a virtual receptionist and I can help take your message.",
+      ? "Hi, thank you for calling Messenger Orthodontics. Our team is away from the desk for lunch right now, but I'm a virtual receptionist and I can help take your message."
+      : "Hi, thank you for calling Messenger Orthodontics. Our team is currently with patients, but I'm a virtual receptionist and I can help take your message.",
   });
 
   res.type("text/xml");
@@ -324,15 +326,15 @@ wss.on("connection", (ws) => {
       const userText = normalizeSpeech(msg.voicePrompt || "");
       if (!userText) {
         if (session.stage === "ask-name") {
-          sendTextToken(ws, "I’m sorry, I didn’t catch that. Please say the patient’s first and last name.");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Please say the patient's first and last name.");
         } else if (session.stage === "ask-reason") {
-          sendTextToken(ws, "I’m sorry, I didn’t catch that. Please briefly tell me what you need help with today.");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Please briefly tell me what you need help with today.");
         } else if (session.stage === "ask-times") {
-          sendTextToken(ws, "I’m sorry, I didn’t catch that. What days and times usually work best for you?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
         } else if (session.stage === "ask-urgency") {
-          sendTextToken(ws, "I’m sorry, I didn’t catch that. Would you describe this as mild discomfort, urgent, or an emergency?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe this as mild discomfort, urgent, or an emergency?");
         } else {
-          sendTextToken(ws, "I’m sorry, I didn’t catch that. Please say that one more time.");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
         return;
       }
@@ -374,13 +376,15 @@ Next step: Contact patient immediately`
 
           sendTextToken(
             ws,
-            "Thank you. I’ve marked this as urgent and sent it to the team right away. If this is a serious medical emergency, please hang up and call 9 1 1."
+            "Thank you. I've marked this as urgent and sent it to the team right away. If this is a serious medical emergency, please hang up and call 9 1 1."
           );
 
-          endConversation(ws, {
-            reason: "possible-emergency",
-            callSid: session.callSid,
-          });
+          setTimeout(() => {
+            endConversation(ws, {
+              reason: "possible-emergency",
+              callSid: session.callSid,
+            });
+          }, 3000);
 
           sessions.delete(session.callSid);
           return;
@@ -430,7 +434,7 @@ Next step: Contact patient immediately`
       try {
         sendTextToken(
           ws,
-          "I’m sorry, something went wrong. Please call us again in a moment."
+          "I'm sorry, something went wrong. Please call us again in a moment."
         );
         endConversation(ws, { reason: "server-error" });
       } catch (_) {}

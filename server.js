@@ -509,31 +509,12 @@ Details: ${session.reason}`
         if (isNewPatientConsultation(userText)) {
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
-
-          await safeText(
-            officeLineTextNumber,
-            `📞 AI RECEPTIONIST
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Type: ${session.callTypeLabel}
-Appointment type: ${session.appointmentType}`
-          );
+          session.stage = "ask-times";
 
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
+            "Wonderful. We offer complimentary consultations, and we treat the whole family, children, teens, and adults. What days and times usually work best for you? A team member will get back to you soon with options. You can also book online at messenger dash smiles dot com."
           );
-
-          setTimeout(() => {
-            endConversation(ws, {
-              reason: "new-patient-consultation",
-              callSid: session.callSid,
-              patientName: session.patientName,
-              intent: session.intent,
-            });
-          }, 14500);
-
-          sessions.delete(session.callSid);
           return;
         }
 

@@ -639,10 +639,10 @@ Details: ${session.reason}`
         session.sameDayAvailability = userText;
 
         const lines = [
-          getTextHeader(session.callTypeLabel || "Comfort Visit"),
-          `Patient Name: ${session.patientName || "Not captured"}`,
-          `Caller: ${session.callerNumber || "Unknown"}`,
-        ];
+  getTextHeader(session.callTypeLabel || "Comfort Visit"),
+  `Patient Name: ${session.patientName || "Not captured"}`,
+  `Caller: ${session.callerNumber || "Unknown"}`,
+];
 
         if (session.severity) {
           lines.push(`Severity: ${session.severity}`);

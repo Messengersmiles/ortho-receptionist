@@ -178,6 +178,24 @@ function classifyIntent(text) {
   }
 
   if (
+    t.includes("other office") ||
+    t.includes("office") ||
+    t.includes("dental office") ||
+    t.includes("dentist") ||
+    t.includes("doctor") ||
+    t.includes("lab") ||
+    t.includes("dental lab") ||
+    t.includes("records") ||
+    t.includes("x ray") ||
+    t.includes("x-ray") ||
+    t.includes("xrays") ||
+    t.includes("x rays") ||
+    t.includes("referral")
+  ) {
+    return "other-office";
+  }
+
+  if (
     t.includes("question") ||
     t.includes("insurance") ||
     t.includes("billing") ||
@@ -220,6 +238,7 @@ function getCallTypeHeader(session) {
   if (type === "RESCHEDULE") return "🔁 RESCHEDULE";
   if (type === "COMFORT VISIT") return "🦷 COMFORT VISIT";
   if (type === "QUESTION") return "❓ QUESTION";
+  if (type === "OTHER OFFICE") return "🏢 OTHER OFFICE";
   if (type === "EMERGENCY") return "🚨 EMERGENCY";
 
   return "📞 CALL";
@@ -252,6 +271,10 @@ async function finalizeAndNotify(session, ws) {
     `Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
+
+  if (session.officeName) {
+    lines.push(`Office/Lab: ${session.officeName}`);
+  }
 
   if (session.appointmentType) {
     lines.push(`Appointment type: ${session.appointmentType}`);
@@ -326,6 +349,7 @@ wss.on("connection", (ws) => {
           patientName: "",
           intent: "",
           callTypeLabel: "",
+          officeName: "",
           reason: "",
           appointmentType: "",
           preferredTimes: "",
@@ -359,6 +383,8 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
         } else if (session.stage === "ask-question-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
+        } else if (session.stage === "ask-other-office-details") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What office or lab are you calling from, and what can we help with today?");
         } else if (session.stage === "ask-comfort-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
         } else if (session.stage === "ask-severity") {
@@ -377,7 +403,7 @@ wss.on("connection", (ws) => {
 
         sendTextToken(
           ws,
-          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, or ask a question."
+          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, ask a question, or other office."
         );
         return;
       }
@@ -451,6 +477,16 @@ Details: ${session.reason}`
           return;
         }
 
+        if (session.intent === "other-office") {
+          session.callTypeLabel = "Other Office";
+          session.stage = "ask-other-office-details";
+          sendTextToken(
+            ws,
+            "What office or lab are you calling from, and what can we help with today?"
+          );
+          return;
+        }
+
         if (session.intent === "question") {
           session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
@@ -517,6 +553,15 @@ Appointment type: ${session.appointmentType}`
       }
 
       if (session.stage === "ask-question-details") {
+        session.reason = userText;
+        session.stage = "finish";
+        await finalizeAndNotify(session, ws);
+        sessions.delete(session.callSid);
+        return;
+      }
+
+      if (session.stage === "ask-other-office-details") {
+        session.officeName = userText;
         session.reason = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);

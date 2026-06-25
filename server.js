@@ -272,28 +272,28 @@ async function finalizeAndNotify(session, ws) {
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
-  if (session.officeName) {
-    lines.push(`Office/Lab: ${session.officeName}`);
-  }
+  if (session.callTypeLabel === "Other Office" && session.officeName) {
+    lines.push(`Office/Lab Request: ${session.officeName}`);
+  } else {
+    if (session.appointmentType && session.callTypeLabel !== "New Patient Consultation") {
+      lines.push(`Appointment type: ${session.appointmentType}`);
+    }
 
-  if (session.appointmentType) {
-    lines.push(`Appointment type: ${session.appointmentType}`);
-  }
+    if (session.preferredTimes) {
+      lines.push(`Preferred days/times: ${session.preferredTimes}`);
+    }
 
-  if (session.preferredTimes) {
-    lines.push(`Preferred days/times: ${session.preferredTimes}`);
-  }
+    if (session.severity) {
+      lines.push(`Severity: ${session.severity}`);
+    }
 
-  if (session.severity) {
-    lines.push(`Severity: ${session.severity}`);
-  }
+    if (session.sameDayAvailability) {
+      lines.push(`Available today: ${session.sameDayAvailability}`);
+    }
 
-  if (session.sameDayAvailability) {
-    lines.push(`Available today: ${session.sameDayAvailability}`);
-  }
-
-  if (session.reason && !session.appointmentType) {
-    lines.push(`Question/Notes: ${session.reason}`);
+    if (session.reason && !session.appointmentType && session.callTypeLabel !== "Other Office") {
+      lines.push(`Question/Notes: ${session.reason}`);
+    }
   }
 
   await safeText(officeLineTextNumber, lines.join("\n"));
@@ -514,8 +514,7 @@ Details: ${session.reason}`
             officeLineTextNumber,
             `${getCallTypeHeader(session)}
 Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Appointment type: ${session.appointmentType}`
+Caller: ${session.callerNumber || "Unknown"}`
           );
 
           sendTextToken(
@@ -562,7 +561,7 @@ Appointment type: ${session.appointmentType}`
 
       if (session.stage === "ask-other-office-details") {
         session.officeName = userText;
-        session.reason = userText;
+        session.reason = "";
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);

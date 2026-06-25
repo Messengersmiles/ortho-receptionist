@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ server, path: "/conversation-relay" });
 // ===== CONFIG =====
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const publicHost = process.env.PUBLIC_HOST;
+const publicHost = process.env.PUBLIC_HOST; // example: ortho-receptionist-uc4w.onrender.com
 const client = twilio(accountSid, authToken);
 
 const twilioNumber = "+17144770304";
@@ -32,9 +32,11 @@ function formatPhoneNumber(number) {
   if (!number) return "";
 
   const raw = String(number).trim();
+
   if (/^\+\d{10,15}$/.test(raw)) return raw;
 
   const cleaned = raw.replace(/\D/g, "");
+
   if (cleaned.length === 10) return `+1${cleaned}`;
   if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
 
@@ -44,23 +46,20 @@ function formatPhoneNumber(number) {
 async function safeText(to, body) {
   try {
     const formattedTo = formatPhoneNumber(to);
-
     if (!formattedTo || !body) {
       console.log("Skipping text - invalid number or empty body:", to);
-      return false;
+      return;
     }
 
-    const message = await client.messages.create({
+    await client.messages.create({
       body,
       from: twilioNumber,
       to: formattedTo,
     });
 
-    console.log(`Text sent to ${formattedTo}. SID: ${message.sid}`);
-    return true;
+    console.log(`Text sent to ${formattedTo}`);
   } catch (err) {
     console.error(`Failed to text ${to}:`, err.message);
-    return false;
   }
 }
 
@@ -179,24 +178,6 @@ function classifyIntent(text) {
   }
 
   if (
-    t.includes("other office") ||
-    t.includes("office") ||
-    t.includes("dental office") ||
-    t.includes("dentist") ||
-    t.includes("doctor") ||
-    t.includes("lab") ||
-    t.includes("dental lab") ||
-    t.includes("records") ||
-    t.includes("x ray") ||
-    t.includes("x-ray") ||
-    t.includes("xrays") ||
-    t.includes("x rays") ||
-    t.includes("referral")
-  ) {
-    return "other-office";
-  }
-
-  if (
     t.includes("question") ||
     t.includes("insurance") ||
     t.includes("billing") ||
@@ -239,7 +220,6 @@ function getCallTypeHeader(session) {
   if (type === "RESCHEDULE") return "🔁 RESCHEDULE";
   if (type === "COMFORT VISIT") return "🦷 COMFORT VISIT";
   if (type === "QUESTION") return "❓ QUESTION";
-  if (type === "OTHER OFFICE") return "🏢 OTHER OFFICE";
   if (type === "EMERGENCY") return "🚨 EMERGENCY";
 
   return "📞 CALL";
@@ -269,34 +249,28 @@ function endConversation(ws, handoffData = {}) {
 async function finalizeAndNotify(session, ws) {
   const lines = [
     getCallTypeHeader(session),
-    `Patient Name: ${session.patientName || "Not captured"}`,
+    `Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
-  if (session.callTypeLabel === "Other Office") {
-    if (session.officeName) {
-      lines.push(`Office/Lab Request: ${session.officeName}`);
-    }
-  } else {
-    if (session.appointmentType && session.callTypeLabel !== "New Patient Consultation") {
-      lines.push(`Appointment type: ${session.appointmentType}`);
-    }
+  if (session.appointmentType) {
+    lines.push(`Appointment type: ${session.appointmentType}`);
+  }
 
-    if (session.preferredTimes) {
-      lines.push(`Preferred days/times: ${session.preferredTimes}`);
-    }
+  if (session.preferredTimes) {
+    lines.push(`Preferred days/times: ${session.preferredTimes}`);
+  }
 
-    if (session.severity) {
-      lines.push(`Severity: ${session.severity}`);
-    }
+  if (session.severity) {
+    lines.push(`Severity: ${session.severity}`);
+  }
 
-    if (session.sameDayAvailability) {
-      lines.push(`Available today: ${session.sameDayAvailability}`);
-    }
+  if (session.sameDayAvailability) {
+    lines.push(`Available today: ${session.sameDayAvailability}`);
+  }
 
-    if (session.reason && !session.appointmentType && session.callTypeLabel !== "Other Office") {
-      lines.push(`Question/Notes: ${session.reason}`);
-    }
+  if (session.reason && !session.appointmentType) {
+    lines.push(`Question/Notes: ${session.reason}`);
   }
 
   await safeText(officeLineTextNumber, lines.join("\n"));
@@ -352,7 +326,6 @@ wss.on("connection", (ws) => {
           patientName: "",
           intent: "",
           callTypeLabel: "",
-          officeName: "",
           reason: "",
           appointmentType: "",
           preferredTimes: "",
@@ -362,6 +335,7 @@ wss.on("connection", (ws) => {
         };
 
         sessions.set(msg.callSid, session);
+
         sendTextToken(ws, "Please say the patient's first and last name.");
         return;
       }
@@ -383,20 +357,14 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, retainer check, or new retainer.");
         } else if (session.stage === "ask-times") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
-        } else if (session.stage === "ask-reschedule-details") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times work best for you for the reschedule?");
         } else if (session.stage === "ask-question-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
-        } else if (session.stage === "ask-other-office-details") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. What office or lab are you calling from, and what can we help with today?");
         } else if (session.stage === "ask-comfort-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
         } else if (session.stage === "ask-severity") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, or urgent?");
         } else if (session.stage === "ask-same-day-availability") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today? Please say yes or no.");
-        } else if (session.stage === "ask-new-patient-times") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times work best for you?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -409,7 +377,7 @@ wss.on("connection", (ws) => {
 
         sendTextToken(
           ws,
-          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, ask a question, or other office."
+          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, or ask a question."
         );
         return;
       }
@@ -424,7 +392,7 @@ wss.on("connection", (ws) => {
           await safeText(
             doctorEmergencyNumber,
             `🚨 EMERGENCY
-Patient Name: ${session.patientName || "Not captured"}
+Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -432,7 +400,7 @@ Details: ${session.reason}`
           await safeText(
             officeLineTextNumber,
             `🚨 EMERGENCY
-Patient Name: ${session.patientName || "Not captured"}
+Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -455,10 +423,10 @@ Details: ${session.reason}`
 
         if (session.intent === "reschedule") {
           session.callTypeLabel = "Reschedule";
-          session.stage = "ask-reschedule-details";
+          session.stage = "ask-times";
           sendTextToken(
             ws,
-            "We are sorry you can't make it. What days and times work best for you for the reschedule?"
+            "We are sorry you can't make it. Can you give me some preferred days and times that I can send the team so they can look into some alternative options for you?"
           );
           return;
         }
@@ -476,16 +444,9 @@ Details: ${session.reason}`
         if (session.intent === "comfort-visit") {
           session.callTypeLabel = "Comfort Visit";
           session.stage = "ask-comfort-details";
-          sendTextToken(ws, "In a few words, please let us know what is going on.");
-          return;
-        }
-
-        if (session.intent === "other-office") {
-          session.callTypeLabel = "Other Office";
-          session.stage = "ask-other-office-details";
           sendTextToken(
             ws,
-            "What office or lab are you calling from, and what can we help with today?"
+            "In a few words, please let us know what is going on."
           );
           return;
         }
@@ -493,7 +454,10 @@ Details: ${session.reason}`
         if (session.intent === "question") {
           session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
-          sendTextToken(ws, "What would you like to ask the team?");
+          sendTextToken(
+            ws,
+            "What would you like to ask the team?"
+          );
           return;
         }
 
@@ -509,75 +473,38 @@ Details: ${session.reason}`
         if (isNewPatientConsultation(userText)) {
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
-          session.stage = "ask-new-patient-times";
+
+          await safeText(
+            officeLineTextNumber,
+            `${getCallTypeHeader(session)}
+Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Appointment type: ${session.appointmentType}`
+          );
 
           sendTextToken(
             ws,
-            "Great! We treat the whole family, children, teens, and adults. What days and times work best for you?"
+            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
           );
+
+          setTimeout(() => {
+            endConversation(ws, {
+              reason: "new-patient-consultation",
+              callSid: session.callSid,
+              patientName: session.patientName,
+              intent: session.intent,
+            });
+          }, 14500);
+
+          sessions.delete(session.callSid);
           return;
         }
 
         session.stage = "ask-times";
-        sendTextToken(ws, "Thank you. What days and times usually work best for you?");
-        return;
-      }
-
-      if (session.stage === "ask-new-patient-times") {
-        session.preferredTimes = userText;
-
-        await safeText(
-          officeLineTextNumber,
-          `${getCallTypeHeader(session)}
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Preferred days/times: ${session.preferredTimes || "Not captured"}`
-        );
-
         sendTextToken(
           ws,
-          "Thank you. A team member will get back to you shortly to help schedule your consultation. If you'd like to check availability or book online, you can visit messenger dash smiles dot com. We look forward to meeting you."
+          "Thank you. What days and times usually work best for you?"
         );
-
-        setTimeout(() => {
-          endConversation(ws, {
-            reason: "new-patient-consultation",
-            callSid: session.callSid,
-            patientName: session.patientName,
-            intent: session.intent,
-          });
-        }, 14500);
-
-        sessions.delete(session.callSid);
-        return;
-      }
-
-      if (session.stage === "ask-reschedule-details") {
-        session.preferredTimes = userText;
-
-        await safeText(
-          officeLineTextNumber,
-          `🔁 RESCHEDULE
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Preferred days/times: ${session.preferredTimes || "Not captured"}`
-        );
-
-        sendTextToken(
-          ws,
-          "Great. I will send this to the team and someone will get back to you shortly."
-        );
-
-        setTimeout(() => {
-          endConversation(ws, {
-            reason: "reschedule-complete",
-            callSid: session.callSid,
-            patientName: session.patientName,
-            intent: session.intent,
-          });
-        }, 6000);
-
-        sessions.delete(session.callSid);
         return;
       }
 
@@ -591,36 +518,6 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
 
       if (session.stage === "ask-question-details") {
         session.reason = userText;
-
-        await safeText(
-          officeLineTextNumber,
-          `${getCallTypeHeader(session)}
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Question/Notes: ${session.reason || "Not captured"}`
-        );
-
-        sendTextToken(
-          ws,
-          "Great. I will send your message to the team and someone will get back to you shortly."
-        );
-
-        setTimeout(() => {
-          endConversation(ws, {
-            reason: "question-complete",
-            callSid: session.callSid,
-            patientName: session.patientName,
-            intent: session.intent,
-          });
-        }, 6000);
-
-        sessions.delete(session.callSid);
-        return;
-      }
-
-      if (session.stage === "ask-other-office-details") {
-        session.officeName = userText;
-        session.reason = "";
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
@@ -630,7 +527,10 @@ Question/Notes: ${session.reason || "Not captured"}`
       if (session.stage === "ask-comfort-details") {
         session.reason = userText;
         session.stage = "ask-severity";
-        sendTextToken(ws, "Would you describe it as mild, moderate, or urgent?");
+        sendTextToken(
+          ws,
+          "Would you describe it as mild, moderate, or urgent?"
+        );
         return;
       }
 
@@ -664,18 +564,29 @@ Question/Notes: ${session.reason || "Not captured"}`
 
         const lines = [
           getCallTypeHeader(session),
-          `Patient Name: ${session.patientName || "Not captured"}`,
+          `Name: ${session.patientName || "Not captured"}`,
           `Caller: ${session.callerNumber || "Unknown"}`,
         ];
 
-        if (session.severity) lines.push(`Severity: ${session.severity}`);
-        if (session.sameDayAvailability) lines.push(`Available today: ${session.sameDayAvailability}`);
-        if (session.reason) lines.push(`Question/Notes: ${session.reason}`);
+        if (session.severity) {
+          lines.push(`Severity: ${session.severity}`);
+        }
+
+        if (session.sameDayAvailability) {
+          lines.push(`Available today: ${session.sameDayAvailability}`);
+        }
+
+        if (session.reason) {
+          lines.push(`Question/Notes: ${session.reason}`);
+        }
 
         await safeText(officeLineTextNumber, lines.join("\n"));
 
         if (answer.includes("yes") || answer.includes("yeah") || answer.includes("yep")) {
-          sendTextToken(ws, "Great. We will get back to you shortly with available times.");
+          sendTextToken(
+            ws,
+            "Great. We will get back to you shortly with available times."
+          );
         } else {
           sendTextToken(
             ws,

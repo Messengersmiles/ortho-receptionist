@@ -512,28 +512,12 @@ Details: ${session.reason}`
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
 
-          await safeText(
-            officeLineTextNumber,
-            `${getCallTypeHeader(session)}
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}`
-          );
-
+          // Ask preferred days/times first
+          session.stage = "ask-new-patient-times";
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
+            "Thank you. What days and times usually work best for you for your consultation?"
           );
-
-          setTimeout(() => {
-            endConversation(ws, {
-              reason: "new-patient-consultation",
-              callSid: session.callSid,
-              patientName: session.patientName,
-              intent: session.intent,
-            });
-          }, 14500);
-
-          sessions.delete(session.callSid);
           return;
         }
 
@@ -542,6 +526,36 @@ Caller: ${session.callerNumber || "Unknown"}`
           ws,
           "Thank you. What days and times usually work best for you?"
         );
+        return;
+      }
+
+      // New patient consultation preferred times
+      if (session.stage === "ask-new-patient-times") {
+        session.preferredTimes = userText;
+
+        await safeText(
+          officeLineTextNumber,
+          `${getCallTypeHeader(session)}
+Patient Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Preferred days/times: ${session.preferredTimes || "Not captured"}`
+        );
+
+        sendTextToken(
+          ws,
+          "Thank you. A team member will get back to you shortly to help schedule your consultation. If you'd like to check availability or book online, you can visit messenger dash smiles dot com. We look forward to meeting you."
+        );
+
+        setTimeout(() => {
+          endConversation(ws, {
+            reason: "new-patient-consultation",
+            callSid: session.callSid,
+            patientName: session.patientName,
+            intent: session.intent,
+          });
+        }, 14500);
+
+        sessions.delete(session.callSid);
         return;
       }
 

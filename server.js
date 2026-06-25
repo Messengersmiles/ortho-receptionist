@@ -21,13 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-
-// Riley voice
 const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
-
-// Set to "A" or "B" if you ever want to force the Tuesday lunch pattern manually.
-// Leave as null to let it auto-calculate the A/B pattern.
-// A starts Tuesday March 31, 2026.
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -208,6 +202,16 @@ function looksEmergency(text) {
   );
 }
 
+function isNewPatientConsultation(text) {
+  const t = (text || "").toLowerCase();
+  return (
+    t.includes("new patient consultation") ||
+    t.includes("new patient consult") ||
+    t.includes("consultation") ||
+    t.includes("consult")
+  );
+}
+
 function sendTextToken(ws, token, last = true) {
   ws.send(
     JSON.stringify({
@@ -247,8 +251,8 @@ async function finalizeAndNotify(session, ws) {
     lines.push(`Preferred days/times: ${session.preferredTimes}`);
   }
 
-  if (session.urgency) {
-    lines.push(`Urgency: ${session.urgency}`);
+  if (session.sameDayAvailability) {
+    lines.push(`Available today around 4:40: ${session.sameDayAvailability}`);
   }
 
   lines.push("Next step: Follow up with patient");
@@ -257,7 +261,7 @@ async function finalizeAndNotify(session, ws) {
 
   sendTextToken(
     ws,
-    "Thank you. I passed your information to the team."
+    "Thank you. I passed your information to the team. Someone will get back to you shortly."
   );
 
   setTimeout(() => {
@@ -267,7 +271,7 @@ async function finalizeAndNotify(session, ws) {
       patientName: session.patientName,
       intent: session.intent,
     });
-  }, 4500);
+  }, 7000);
 }
 
 // ===== INBOUND CALL WEBHOOK =====
@@ -308,7 +312,7 @@ wss.on("connection", (ws) => {
           reason: "",
           appointmentType: "",
           preferredTimes: "",
-          urgency: "",
+          sameDayAvailability: "",
           stage: "ask-name",
         };
 
@@ -332,13 +336,15 @@ wss.on("connection", (ws) => {
         } else if (session.stage === "ask-reason") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please briefly tell me what you need help with today.");
         } else if (session.stage === "ask-appointment-type") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, comfort visit, retainer check, or new retainer.");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, retainer check, or new retainer.");
         } else if (session.stage === "ask-times") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
-        } else if (session.stage === "ask-urgency") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe this as mild discomfort, urgent, or an emergency?");
         } else if (session.stage === "ask-question-details") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. Please tell me your question, and I'll pass it along to the team.");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
+        } else if (session.stage === "ask-comfort-details") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
+        } else if (session.stage === "ask-same-day-availability") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. If we can get you in today, would you be available at the end of the day, around 4 40?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -361,8 +367,6 @@ wss.on("connection", (ws) => {
         session.intent = classifyIntent(userText);
 
         if (looksEmergency(userText)) {
-          session.urgency = "Possible emergency";
-
           await safeText(
             doctorEmergencyNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
@@ -390,26 +394,35 @@ Next step: Contact patient immediately`
               reason: "possible-emergency",
               callSid: session.callSid,
             });
-          }, 3000);
+          }, 4000);
 
           sessions.delete(session.callSid);
           return;
         }
 
-        if (session.intent === "schedule" || session.intent === "reschedule") {
+        if (session.intent === "reschedule") {
+          session.stage = "ask-times";
+          sendTextToken(
+            ws,
+            "We are sorry you can't make it. Can you give me some preferred days and times that I can send the team so they can look into some alternative options for you?"
+          );
+          return;
+        }
+
+        if (session.intent === "schedule") {
           session.stage = "ask-appointment-type";
           sendTextToken(
             ws,
-            "Got it. What kind of appointment is this for? For example, a new patient consultation, braces appointment, comfort visit, retainer check, or new retainer."
+            "Got it. What kind of appointment is this for? For example, a new patient consultation, braces appointment, retainer check, or new retainer."
           );
           return;
         }
 
         if (session.intent === "comfort-visit") {
-          session.stage = "ask-urgency";
+          session.stage = "ask-comfort-details";
           sendTextToken(
             ws,
-            "Thanks. Would you describe this as mild discomfort, urgent, or an emergency?"
+            "In a few words, please let us know what is going on."
           );
           return;
         }
@@ -418,7 +431,7 @@ Next step: Contact patient immediately`
           session.stage = "ask-question-details";
           sendTextToken(
             ws,
-            "Of course. Please tell me your question, and I'll pass it along to the team."
+            "What would you like to ask the team?"
           );
           return;
         }
@@ -431,6 +444,38 @@ Next step: Contact patient immediately`
 
       if (session.stage === "ask-appointment-type") {
         session.appointmentType = userText;
+
+        if (isNewPatientConsultation(userText)) {
+          session.reason = "New patient consultation";
+          await safeText(
+            officeLineTextNumber,
+            `📞 AI RECEPTIONIST
+Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Request: schedule
+Appointment type: ${session.appointmentType}
+Details: ${session.reason}
+Next step: Contact patient to set up new patient consultation`
+          );
+
+          sendTextToken(
+            ws,
+            "Awesome! We treat the entire family, children, teens, and adults. I'll have a team member get back to you to set something up. If you want to book online or check our availability, you can at www dot messenger-smiles dot com."
+          );
+
+          setTimeout(() => {
+            endConversation(ws, {
+              reason: "new-patient-consultation",
+              callSid: session.callSid,
+              patientName: session.patientName,
+              intent: session.intent,
+            });
+          }, 9500);
+
+          sessions.delete(session.callSid);
+          return;
+        }
+
         session.stage = "ask-times";
         sendTextToken(
           ws,
@@ -447,16 +492,26 @@ Next step: Contact patient immediately`
         return;
       }
 
-      if (session.stage === "ask-urgency") {
-        session.urgency = userText;
+      if (session.stage === "ask-question-details") {
+        session.reason = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
         return;
       }
 
-      if (session.stage === "ask-question-details") {
+      if (session.stage === "ask-comfort-details") {
         session.reason = userText;
+        session.stage = "ask-same-day-availability";
+        sendTextToken(
+          ws,
+          "If we can get you in today, would you be available at the end of the day, around 4 40?"
+        );
+        return;
+      }
+
+      if (session.stage === "ask-same-day-availability") {
+        session.sameDayAvailability = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);

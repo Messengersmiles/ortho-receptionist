@@ -463,7 +463,7 @@ Appointment type: ${session.appointmentType}`
 
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger-smiles dot com."
+            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We are excited to meet you!"
           );
 
           setTimeout(() => {
@@ -473,7 +473,7 @@ Appointment type: ${session.appointmentType}`
               patientName: session.patientName,
               intent: session.intent,
             });
-          }, 12000);
+          }, 14500);
 
           sessions.delete(session.callSid);
           return;

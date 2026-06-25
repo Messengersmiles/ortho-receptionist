@@ -238,24 +238,27 @@ async function finalizeAndNotify(session, ws) {
     "📞 AI RECEPTIONIST",
     `Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
-    `Request: ${session.intent || "Unknown"}`,
   ];
 
   if (session.appointmentType) {
     lines.push(`Appointment type: ${session.appointmentType}`);
   }
 
-  lines.push(`Details: ${session.reason || "None provided"}`);
-
   if (session.preferredTimes) {
     lines.push(`Preferred days/times: ${session.preferredTimes}`);
+  }
+
+  if (session.severity) {
+    lines.push(`Severity: ${session.severity}`);
   }
 
   if (session.sameDayAvailability) {
     lines.push(`Available today around 4:40: ${session.sameDayAvailability}`);
   }
 
-  lines.push("Next step: Follow up with patient");
+  if (session.reason && !session.appointmentType) {
+    lines.push(`Question/Notes: ${session.reason}`);
+  }
 
   await safeText(officeLineTextNumber, lines.join("\n"));
 
@@ -312,6 +315,7 @@ wss.on("connection", (ws) => {
           reason: "",
           appointmentType: "",
           preferredTimes: "",
+          severity: "",
           sameDayAvailability: "",
           stage: "ask-name",
         };
@@ -343,8 +347,10 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
         } else if (session.stage === "ask-comfort-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
+        } else if (session.stage === "ask-severity") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, urgent, or an emergency?");
         } else if (session.stage === "ask-same-day-availability") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. If we can get you in today, would you be available at the end of the day, around 4 40?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. If we are able to see you today, would you be available toward the end of the day, around 4 40?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -380,8 +386,7 @@ Details: ${session.reason}`
             `🚨 POSSIBLE ORTHO EMERGENCY
 Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
-Details: ${session.reason}
-Next step: Contact patient immediately`
+Details: ${session.reason}`
           );
 
           sendTextToken(
@@ -447,20 +452,18 @@ Next step: Contact patient immediately`
 
         if (isNewPatientConsultation(userText)) {
           session.reason = "New patient consultation";
+
           await safeText(
             officeLineTextNumber,
             `📞 AI RECEPTIONIST
 Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
-Request: schedule
-Appointment type: ${session.appointmentType}
-Details: ${session.reason}
-Next step: Contact patient to set up new patient consultation`
+Appointment type: ${session.appointmentType}`
           );
 
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. I'll have a team member get back to you to set something up. If you want to book online or check our availability, you can at www dot messenger-smiles dot com."
+            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger-smiles dot com."
           );
 
           setTimeout(() => {
@@ -470,7 +473,7 @@ Next step: Contact patient to set up new patient consultation`
               patientName: session.patientName,
               intent: session.intent,
             });
-          }, 9500);
+          }, 12000);
 
           sessions.delete(session.callSid);
           return;
@@ -502,10 +505,20 @@ Next step: Contact patient to set up new patient consultation`
 
       if (session.stage === "ask-comfort-details") {
         session.reason = userText;
+        session.stage = "ask-severity";
+        sendTextToken(
+          ws,
+          "Would you describe it as mild, moderate, urgent, or an emergency?"
+        );
+        return;
+      }
+
+      if (session.stage === "ask-severity") {
+        session.severity = userText;
         session.stage = "ask-same-day-availability";
         sendTextToken(
           ws,
-          "If we can get you in today, would you be available at the end of the day, around 4 40?"
+          "Thank you. We want to make sure we are able to properly address your concern, and a team member will get back to you with available times to see you today. If we are able to see you today, would you be available toward the end of the day, around 4 40?"
         );
         return;
       }

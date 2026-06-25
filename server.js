@@ -105,7 +105,7 @@ function getTuesdayLunchPattern(now = new Date()) {
   const anchorTuesdayUtc = new Date("2026-03-31T12:00:00Z");
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const diffMs = now.getTime() - anchorTuesdayUtc.getTime();
-  const weeksFromAnchor = Math.floor(diffMs / msPerWeek);
+  the weeksFromAnchor = Math.floor(diffMs / msPerWeek);
 
   return Math.abs(weeksFromAnchor) % 2 === 0 ? "A" : "B";
 }
@@ -187,6 +187,19 @@ function classifyIntent(text) {
     return "question";
   }
 
+  // New intent for Other Office / Lab callers
+  if (
+    t.includes("other office") ||
+    t.includes("other dentist") ||
+    t.includes("other dental") ||
+    t.includes("dental office") ||
+    t.includes("dental lab") ||
+    t.includes("lab calling") ||
+    t.includes("from the lab")
+  ) {
+    return "other-office";
+  }
+
   return "other";
 }
 
@@ -262,6 +275,10 @@ async function finalizeAndNotify(session, ws) {
     lines.push(`Available today: ${session.sameDayAvailability}`);
   }
 
+  if (session.officeName) {
+    lines.push(`Office/Lab: ${session.officeName}`);
+  }
+
   if (session.reason && !session.appointmentType) {
     lines.push(`Question/Notes: ${session.reason}`);
   }
@@ -324,6 +341,7 @@ wss.on("connection", (ws) => {
           preferredTimes: "",
           severity: "",
           sameDayAvailability: "",
+          officeName: "", // NEW: track other office/lab name
           stage: "ask-name",
         };
 
@@ -358,6 +376,10 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, or urgent?");
         } else if (session.stage === "ask-same-day-availability") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today?");
+        } else if (session.stage === "ask-other-office-name") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What dental office or lab are you calling from?");
+        } else if (session.stage === "ask-other-office-question") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What question do you have for the team?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -370,7 +392,7 @@ wss.on("connection", (ws) => {
 
         sendTextToken(
           ws,
-          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, or ask a question."
+          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, ask a question, or other office."
         );
         return;
       }
@@ -454,6 +476,19 @@ Details: ${session.reason}`
           return;
         }
 
+        // NEW: Other Office branch
+        if (session.intent === "other-office") {
+          session.callTypeLabel = "Other Office";
+          // We will capture the office/lab name and then the question
+          session.reason = "";
+          session.stage = "ask-other-office-name";
+          sendTextToken(
+            ws,
+            "Thank you. What dental office or lab are you calling from?"
+          );
+          return;
+        }
+
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
@@ -511,6 +546,26 @@ Appointment type: ${session.appointmentType}`
       }
 
       if (session.stage === "ask-question-details") {
+        session.reason = userText;
+        session.stage = "finish";
+        await finalizeAndNotify(session, ws);
+        sessions.delete(session.callSid);
+        return;
+      }
+
+      // NEW: capture office/lab name
+      if (session.stage === "ask-other-office-name") {
+        session.officeName = userText;
+        session.stage = "ask-other-office-question";
+        sendTextToken(
+          ws,
+          "Thank you. What question do you have for the team?"
+        );
+        return;
+      }
+
+      // NEW: capture question from other office / lab
+      if (session.stage === "ask-other-office-question") {
         session.reason = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);

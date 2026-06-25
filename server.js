@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ server, path: "/conversation-relay" });
 // ===== CONFIG =====
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const publicHost = process.env.PUBLIC_HOST; // example: ortho-receptionist-uc4w.onrender.com
+const publicHost = process.env.PUBLIC_HOST;
 const client = twilio(accountSid, authToken);
 
 const twilioNumber = "+17144770304";
@@ -32,11 +32,9 @@ function formatPhoneNumber(number) {
   if (!number) return "";
 
   const raw = String(number).trim();
-
   if (/^\+\d{10,15}$/.test(raw)) return raw;
 
   const cleaned = raw.replace(/\D/g, "");
-
   if (cleaned.length === 10) return `+1${cleaned}`;
   if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
 
@@ -46,6 +44,7 @@ function formatPhoneNumber(number) {
 async function safeText(to, body) {
   try {
     const formattedTo = formatPhoneNumber(to);
+
     if (!formattedTo || !body) {
       console.log("Skipping text - invalid number or empty body:", to);
       return false;
@@ -363,7 +362,6 @@ wss.on("connection", (ws) => {
         };
 
         sessions.set(msg.callSid, session);
-
         sendTextToken(ws, "Please say the patient's first and last name.");
         return;
       }
@@ -385,6 +383,8 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, retainer check, or new retainer.");
         } else if (session.stage === "ask-times") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
+        } else if (session.stage === "ask-reschedule-details") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times work best for you for the reschedule?");
         } else if (session.stage === "ask-question-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
         } else if (session.stage === "ask-other-office-details") {
@@ -455,10 +455,10 @@ Details: ${session.reason}`
 
         if (session.intent === "reschedule") {
           session.callTypeLabel = "Reschedule";
-          session.stage = "ask-reschedule-times";
+          session.stage = "ask-reschedule-details";
           sendTextToken(
             ws,
-            "We are sorry you can't make it. Can you give me some preferred days and times that I can send the team so they can look into some alternative options for you?"
+            "We are sorry you can't make it. What days and times work best for you for the reschedule?"
           );
           return;
         }
@@ -476,10 +476,7 @@ Details: ${session.reason}`
         if (session.intent === "comfort-visit") {
           session.callTypeLabel = "Comfort Visit";
           session.stage = "ask-comfort-details";
-          sendTextToken(
-            ws,
-            "In a few words, please let us know what is going on."
-          );
+          sendTextToken(ws, "In a few words, please let us know what is going on.");
           return;
         }
 
@@ -496,10 +493,7 @@ Details: ${session.reason}`
         if (session.intent === "question") {
           session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
-          sendTextToken(
-            ws,
-            "What would you like to ask the team?"
-          );
+          sendTextToken(ws, "What would you like to ask the team?");
           return;
         }
 
@@ -515,8 +509,8 @@ Details: ${session.reason}`
         if (isNewPatientConsultation(userText)) {
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
-
           session.stage = "ask-new-patient-times";
+
           sendTextToken(
             ws,
             "Great! We treat the whole family, children, teens, and adults. What days and times work best for you?"
@@ -525,10 +519,7 @@ Details: ${session.reason}`
         }
 
         session.stage = "ask-times";
-        sendTextToken(
-          ws,
-          "Thank you. What days and times usually work best for you?"
-        );
+        sendTextToken(ws, "Thank you. What days and times usually work best for you?");
         return;
       }
 
@@ -561,13 +552,12 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
         return;
       }
 
-      // RESCHEDULE FLOW - copied to mirror the working QUESTION flow
-      if (session.stage === "ask-reschedule-times") {
+      if (session.stage === "ask-reschedule-details") {
         session.preferredTimes = userText;
 
         await safeText(
           officeLineTextNumber,
-          `${getCallTypeHeader(session)}
+          `🔁 RESCHEDULE
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Preferred days/times: ${session.preferredTimes || "Not captured"}`
@@ -640,10 +630,7 @@ Question/Notes: ${session.reason || "Not captured"}`
       if (session.stage === "ask-comfort-details") {
         session.reason = userText;
         session.stage = "ask-severity";
-        sendTextToken(
-          ws,
-          "Would you describe it as mild, moderate, or urgent?"
-        );
+        sendTextToken(ws, "Would you describe it as mild, moderate, or urgent?");
         return;
       }
 
@@ -681,74 +668,15 @@ Question/Notes: ${session.reason || "Not captured"}`
           `Caller: ${session.callerNumber || "Unknown"}`,
         ];
 
-        if (session.severity) {
-          lines.push(`Severity: ${session.severity}`);
-        }
-
-        if (session.sameDayAvailability) {
-          lines.push(`Available today: ${session.sameDayAvailability}`);
-        }
-
-        if (session.reason) {
-          lines.push(`Question/Notes: ${session.reason}`);
-        }
+        if (session.severity) lines.push(`Severity: ${session.severity}`);
+        if (session.sameDayAvailability) lines.push(`Available today: ${session.sameDayAvailability}`);
+        if (session.reason) lines.push(`Question/Notes: ${session.reason}`);
 
         await safeText(officeLineTextNumber, lines.join("\n"));
 
         if (answer.includes("yes") || answer.includes("yeah") || answer.includes("yep")) {
-          sendTextToken(
-            ws,
-            "Great. We will get back to you shortly with available times."
-          );
+          sendTextToken(ws, "Great. We will get back to you shortly with available times.");
         } else {
           sendTextToken(
             ws,
-            "Thank you. We will share this with the team, and someone will get back to you shortly."
-          );
-        }
-
-        setTimeout(() => {
-          endConversation(ws, {
-            reason: "comfort-visit-complete",
-            callSid: session.callSid,
-            patientName: session.patientName,
-            intent: session.intent,
-          });
-        }, 3500);
-
-        sessions.delete(session.callSid);
-        return;
-      }
-    } catch (err) {
-      console.error("WebSocket message error:", err.message);
-      try {
-        sendTextToken(
-          ws,
-          "I'm sorry, something went wrong. Please call us again in a moment."
-        );
-        endConversation(ws, { reason: "server-error" });
-      } catch (_) {}
-    }
-  });
-
-  ws.on("close", () => {
-    if (currentCallSid && sessions.has(currentCallSid)) {
-      sessions.delete(currentCallSid);
-    }
-  });
-
-  ws.on("error", (err) => {
-    console.error("WebSocket error:", err.message);
-  });
-});
-
-// ===== HEALTH CHECK =====
-app.get("/", (req, res) => {
-  res.send("Messenger Orthodontics Conversation Relay server is running.");
-});
-
-// ===== SERVER =====
-const PORT = process.env.PORT || 5050;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+            

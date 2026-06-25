@@ -357,7 +357,7 @@ wss.on("connection", (ws) => {
         } else if (session.stage === "ask-severity") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, urgent, or an emergency?");
         } else if (session.stage === "ask-same-day-availability") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to make sure you are comfortable and see you as soon as possible. Are you available today?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -478,7 +478,7 @@ Appointment type: ${session.appointmentType}`
 
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We are excited to meet you!"
+            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
           );
 
           setTimeout(() => {
@@ -533,16 +533,25 @@ Appointment type: ${session.appointmentType}`
         session.stage = "ask-same-day-availability";
         sendTextToken(
           ws,
-          "Thank you. We want to make sure you are comfortable and see you as soon as possible. Are you available today? If so, we will get back to you with times we have available."
+          "Thank you. We want to address this issue as soon as possible. Are you available today?"
         );
         return;
       }
 
       if (session.stage === "ask-same-day-availability") {
         session.sameDayAvailability = userText;
-        session.stage = "finish";
-        await finalizeAndNotify(session, ws);
-        sessions.delete(session.callSid);
+
+        sendTextToken(
+          ws,
+          "We will get back to you shortly with available times."
+        );
+
+        setTimeout(async () => {
+          session.stage = "finish";
+          await finalizeAndNotify(session, ws);
+          sessions.delete(session.callSid);
+        }, 2500);
+
         return;
       }
     } catch (err) {

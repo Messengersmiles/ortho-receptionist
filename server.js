@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "gJx1vCzNCD1EQHT212Ls";
+const ELEVENLABS_VOICE = "tnSpp4vdxKPjI9w0GnoV";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -419,7 +419,7 @@ wss.on("connection", (ws) => {
 
           await safeText(
             doctorEmergencyNumber,
-            `🚨 EMERGENCY
+            `🚨 POSSIBLE ORTHO EMERGENCY
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
@@ -427,7 +427,7 @@ Details: ${session.reason}`
 
           await safeText(
             officeLineTextNumber,
-            `🚨 EMERGENCY
+            `🚨 POSSIBLE ORTHO EMERGENCY
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
@@ -536,6 +536,7 @@ Details: ${session.reason}`
           `${getCallTypeHeader(session)}
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
+Appointment type: ${session.appointmentType || "Not captured"}
 Preferred days/times: ${session.preferredTimes || "Not captured"}`
         );
 

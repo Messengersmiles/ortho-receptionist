@@ -13,7 +13,7 @@ const wss = new WebSocket.Server({ server, path: "/conversation-relay" });
 // ===== CONFIG =====
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const publicHost = process.env.PUBLIC_HOST; // example: ortho-receptionist-uc4w.onrender.com
+const publicHost = process.env.PUBLIC_HOST;
 const client = twilio(accountSid, authToken);
 
 const twilioNumber = "+17144770304";
@@ -24,7 +24,6 @@ const OFFICE_TIMEZONE = "America/Los_Angeles";
 const ELEVENLABS_VOICE = "gJx1vCzNCD1EQHT212Ls";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
-// In-memory call sessions by callSid
 const sessions = new Map();
 
 // ===== HELPERS =====
@@ -32,24 +31,34 @@ function formatPhoneNumber(number) {
   if (!number) return "";
 
   const raw = String(number).trim();
-
   if (/^\+\d{10,15}$/.test(raw)) return raw;
 
   const cleaned = raw.replace(/\D/g, "");
-
   if (cleaned.length === 10) return `+1${cleaned}`;
   if (cleaned.length === 11 && cleaned.startsWith("1")) return `+${cleaned}`;
 
   return "";
 }
 
-async function safeText(to, body) {
+async function safeText(to, body, label = "SMS") {
   try {
     const formattedTo = formatPhoneNumber(to);
-    if (!formattedTo || !body) {
-      console.log("Skipping text - invalid number or empty body:", to);
-      return false;
+
+    if (!formattedTo) {
+      console.log(`[${label}] Skipping text: invalid destination number`, to);
+      return { ok: false, error: "invalid-destination-number" };
     }
+
+    if (!body || !String(body).trim()) {
+      console.log(`[${label}] Skipping text: empty body`);
+      return { ok: false, error: "empty-body" };
+    }
+
+    console.log(`[${label}] Attempting send`, {
+      from: twilioNumber,
+      to: formattedTo,
+      preview: String(body).slice(0, 200),
+    });
 
     const message = await client.messages.create({
       body,
@@ -57,11 +66,28 @@ async function safeText(to, body) {
       to: formattedTo,
     });
 
-    console.log(`Text sent to ${formattedTo}. SID: ${message.sid}`);
-    return true;
+    console.log(`[${label}] Sent`, {
+      sid: message.sid,
+      status: message.status,
+      to: formattedTo,
+    });
+
+    return { ok: true, sid: message.sid, status: message.status };
   } catch (err) {
-    console.error(`Failed to text ${to}:`, err.message);
-    return false;
+    console.error(`[${label}] Failed`, {
+      message: err.message,
+      code: err.code,
+      status: err.status,
+      moreInfo: err.moreInfo,
+    });
+
+    return {
+      ok: false,
+      error: err.message,
+      code: err.code,
+      status: err.status,
+      moreInfo: err.moreInfo,
+    };
   }
 }
 
@@ -81,9 +107,7 @@ function getPartsInTimeZone(date, timeZone) {
   const map = {};
 
   for (const part of parts) {
-    if (part.type !== "literal") {
-      map[part.type] = part.value;
-    }
+    if (part.type !== "literal") map[part.type] = part.value;
   }
 
   return {
@@ -267,6 +291,27 @@ function endConversation(ws, handoffData = {}) {
   );
 }
 
+function buildRescheduleMessage(session) {
+  return `${getCallTypeHeader(session)}
+Patient Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Preferred days/times: ${session.preferredTimes || "Not captured"}`;
+}
+
+async function sendRescheduleText(session) {
+  console.log("[RESCHEDULE] Preparing dedicated reschedule SMS", {
+    patientName: session.patientName,
+    callerNumber: session.callerNumber,
+    preferredTimes: session.preferredTimes,
+  });
+
+  return await safeText(
+    officeLineTextNumber,
+    buildRescheduleMessage(session),
+    "RESCHEDULE"
+  );
+}
+
 async function finalizeAndNotify(session, ws) {
   const lines = [
     getCallTypeHeader(session),
@@ -300,12 +345,19 @@ async function finalizeAndNotify(session, ws) {
     }
   }
 
-  await safeText(officeLineTextNumber, lines.join("\n"));
+  const result = await safeText(officeLineTextNumber, lines.join("\n"), "FINALIZE");
 
-  sendTextToken(
-    ws,
-    "Thank you. I passed your information to the team. Someone will get back to you shortly."
-  );
+  if (result.ok) {
+    sendTextToken(
+      ws,
+      "Thank you. I passed your information to the team. Someone will get back to you shortly."
+    );
+  } else {
+    sendTextToken(
+      ws,
+      "Thank you. I took your information, but there was a problem sending it to the team automatically. Please call the office again if you do not hear back shortly."
+    );
+  }
 
   setTimeout(() => {
     endConversation(ws, {
@@ -363,14 +415,11 @@ wss.on("connection", (ws) => {
         };
 
         sessions.set(msg.callSid, session);
-
         sendTextToken(ws, "Please say the patient's first and last name.");
         return;
       }
 
-      if (msg.type !== "prompt" || !msg.last || !currentCallSid) {
-        return;
-      }
+      if (msg.type !== "prompt" || !msg.last || !currentCallSid) return;
 
       const session = sessions.get(currentCallSid);
       if (!session) return;
@@ -426,7 +475,8 @@ wss.on("connection", (ws) => {
             `🚨 EMERGENCY
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
-Details: ${session.reason}`
+Details: ${session.reason}`,
+            "EMERGENCY-DOCTOR"
           );
 
           await safeText(
@@ -434,7 +484,8 @@ Details: ${session.reason}`
             `🚨 EMERGENCY
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
-Details: ${session.reason}`
+Details: ${session.reason}`,
+            "EMERGENCY-OFFICE"
           );
 
           sendTextToken(
@@ -476,10 +527,7 @@ Details: ${session.reason}`
         if (session.intent === "comfort-visit") {
           session.callTypeLabel = "Comfort Visit";
           session.stage = "ask-comfort-details";
-          sendTextToken(
-            ws,
-            "In a few words, please let us know what is going on."
-          );
+          sendTextToken(ws, "In a few words, please let us know what is going on.");
           return;
         }
 
@@ -496,10 +544,7 @@ Details: ${session.reason}`
         if (session.intent === "question") {
           session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
-          sendTextToken(
-            ws,
-            "What would you like to ask the team?"
-          );
+          sendTextToken(ws, "What would you like to ask the team?");
           return;
         }
 
@@ -515,8 +560,8 @@ Details: ${session.reason}`
         if (isNewPatientConsultation(userText)) {
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
-
           session.stage = "ask-new-patient-times";
+
           sendTextToken(
             ws,
             "Great! We treat the whole family, children, teens, and adults. What days and times work best for you?"
@@ -525,10 +570,7 @@ Details: ${session.reason}`
         }
 
         session.stage = "ask-times";
-        sendTextToken(
-          ws,
-          "Thank you. What days and times usually work best for you?"
-        );
+        sendTextToken(ws, "Thank you. What days and times usually work best for you?");
         return;
       }
 
@@ -540,7 +582,8 @@ Details: ${session.reason}`
           `${getCallTypeHeader(session)}
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
-Preferred days/times: ${session.preferredTimes || "Not captured"}`
+Preferred days/times: ${session.preferredTimes || "Not captured"}`,
+          "NEW-PATIENT"
         );
 
         sendTextToken(
@@ -565,18 +608,19 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
         session.preferredTimes = userText;
 
         if (session.callTypeLabel === "Reschedule") {
-          await safeText(
-            officeLineTextNumber,
-            `${getCallTypeHeader(session)}
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Preferred days/times: ${session.preferredTimes || "Not captured"}`
-          );
+          const result = await sendRescheduleText(session);
 
-          sendTextToken(
-            ws,
-            "Great. I will send this to the team and someone will get back to you shortly with alternative appointment options."
-          );
+          if (result.ok) {
+            sendTextToken(
+              ws,
+              "Great. I will send this to the team and someone will get back to you shortly with alternative appointment options."
+            );
+          } else {
+            sendTextToken(
+              ws,
+              "Thank you. I took your preferred days and times, but there was a problem sending them automatically. Please call the office again if you do not hear back shortly."
+            );
+          }
 
           setTimeout(() => {
             endConversation(ws, {
@@ -584,6 +628,7 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
               callSid: session.callSid,
               patientName: session.patientName,
               intent: session.intent,
+              smsSent: result.ok,
             });
           }, 7000);
 
@@ -600,18 +645,26 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
       if (session.stage === "ask-question-details") {
         session.reason = userText;
 
-        await safeText(
+        const result = await safeText(
           officeLineTextNumber,
           `${getCallTypeHeader(session)}
 Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
-Question/Notes: ${session.reason || "Not captured"}`
+Question/Notes: ${session.reason || "Not captured"}`,
+          "QUESTION"
         );
 
-        sendTextToken(
-          ws,
-          "Great. I will send your message to the team and someone will get back to you shortly."
-        );
+        if (result.ok) {
+          sendTextToken(
+            ws,
+            "Great. I will send your message to the team and someone will get back to you shortly."
+          );
+        } else {
+          sendTextToken(
+            ws,
+            "Thank you. I took your message, but there was a problem sending it automatically. Please call the office again if you do not hear back shortly."
+          );
+        }
 
         setTimeout(() => {
           endConversation(ws, {
@@ -619,6 +672,7 @@ Question/Notes: ${session.reason || "Not captured"}`
             callSid: session.callSid,
             patientName: session.patientName,
             intent: session.intent,
+            smsSent: result.ok,
           });
         }, 6000);
 
@@ -638,10 +692,7 @@ Question/Notes: ${session.reason || "Not captured"}`
       if (session.stage === "ask-comfort-details") {
         session.reason = userText;
         session.stage = "ask-severity";
-        sendTextToken(
-          ws,
-          "Would you describe it as mild, moderate, or urgent?"
-        );
+        sendTextToken(ws, "Would you describe it as mild, moderate, or urgent?");
         return;
       }
 
@@ -679,25 +730,14 @@ Question/Notes: ${session.reason || "Not captured"}`
           `Caller: ${session.callerNumber || "Unknown"}`,
         ];
 
-        if (session.severity) {
-          lines.push(`Severity: ${session.severity}`);
-        }
+        if (session.severity) lines.push(`Severity: ${session.severity}`);
+        if (session.sameDayAvailability) lines.push(`Available today: ${session.sameDayAvailability}`);
+        if (session.reason) lines.push(`Question/Notes: ${session.reason}`);
 
-        if (session.sameDayAvailability) {
-          lines.push(`Available today: ${session.sameDayAvailability}`);
-        }
-
-        if (session.reason) {
-          lines.push(`Question/Notes: ${session.reason}`);
-        }
-
-        await safeText(officeLineTextNumber, lines.join("\n"));
+        await safeText(officeLineTextNumber, lines.join("\n"), "COMFORT");
 
         if (answer.includes("yes") || answer.includes("yeah") || answer.includes("yep")) {
-          sendTextToken(
-            ws,
-            "Great. We will get back to you shortly with available times."
-          );
+          sendTextToken(ws, "Great. We will get back to you shortly with available times.");
         } else {
           sendTextToken(
             ws,

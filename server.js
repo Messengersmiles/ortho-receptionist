@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "tnSpp4vdxKPjI9w0GnoV";
+const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -178,24 +178,6 @@ function classifyIntent(text) {
   }
 
   if (
-    t.includes("other office") ||
-    t.includes("office") ||
-    t.includes("dental office") ||
-    t.includes("dentist") ||
-    t.includes("doctor") ||
-    t.includes("lab") ||
-    t.includes("dental lab") ||
-    t.includes("records") ||
-    t.includes("x ray") ||
-    t.includes("x-ray") ||
-    t.includes("xrays") ||
-    t.includes("x rays") ||
-    t.includes("referral")
-  ) {
-    return "other-office";
-  }
-
-  if (
     t.includes("question") ||
     t.includes("insurance") ||
     t.includes("billing") ||
@@ -230,20 +212,6 @@ function isNewPatientConsultation(text) {
   );
 }
 
-function getCallTypeHeader(session) {
-  const type = (session.callTypeLabel || "").toUpperCase();
-
-  if (type === "NEW PATIENT CONSULTATION") return "🔥 NEW PATIENT CONSULTATION";
-  if (type === "SCHEDULE") return "📅 SCHEDULE";
-  if (type === "RESCHEDULE") return "🔁 RESCHEDULE";
-  if (type === "COMFORT VISIT") return "🦷 COMFORT VISIT";
-  if (type === "QUESTION") return "❓ QUESTION";
-  if (type === "OTHER OFFICE") return "🏢 OTHER OFFICE";
-  if (type === "EMERGENCY") return "🚨 EMERGENCY";
-
-  return "📞 CALL";
-}
-
 function sendTextToken(ws, token, last = true) {
   ws.send(
     JSON.stringify({
@@ -267,10 +235,16 @@ function endConversation(ws, handoffData = {}) {
 
 async function finalizeAndNotify(session, ws) {
   const lines = [
-    getCallTypeHeader(session),
-    `Patient Name: ${session.patientName || "Not captured"}`,
+    "📞 AI RECEPTIONIST",
+    `Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
+
+  if (session.callTypeLabel) {
+    lines.push(`Type: ${session.callTypeLabel}`);
+  } else if (session.intent) {
+    lines.push(`Type: ${session.intent}`);
+  }
 
   if (session.appointmentType) {
     lines.push(`Appointment type: ${session.appointmentType}`);
@@ -286,10 +260,6 @@ async function finalizeAndNotify(session, ws) {
 
   if (session.sameDayAvailability) {
     lines.push(`Available today: ${session.sameDayAvailability}`);
-  }
-
-  if (session.callTypeLabel === "Other Office" && session.officeName) {
-    lines.push(`Dental Office/Lab: ${session.officeName}`);
   }
 
   if (session.reason && !session.appointmentType) {
@@ -350,7 +320,6 @@ wss.on("connection", (ws) => {
           intent: "",
           callTypeLabel: "",
           reason: "",
-          officeName: "",
           appointmentType: "",
           preferredTimes: "",
           severity: "",
@@ -381,18 +350,14 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, retainer check, or new retainer.");
         } else if (session.stage === "ask-times") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
-        } else if (session.stage === "ask-new-patient-times") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times do you prefer?");
         } else if (session.stage === "ask-question-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
-        } else if (session.stage === "ask-other-office-details") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. What dental office or lab are you calling from, and what question do you have?");
         } else if (session.stage === "ask-comfort-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
         } else if (session.stage === "ask-severity") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, or urgent?");
         } else if (session.stage === "ask-same-day-availability") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today? Please say yes or no.");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -405,7 +370,7 @@ wss.on("connection", (ws) => {
 
         sendTextToken(
           ws,
-          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, ask a question, or other office."
+          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, or ask a question."
         );
         return;
       }
@@ -420,7 +385,7 @@ wss.on("connection", (ws) => {
           await safeText(
             doctorEmergencyNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
-Patient Name: ${session.patientName || "Not captured"}
+Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -428,7 +393,7 @@ Details: ${session.reason}`
           await safeText(
             officeLineTextNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
-Patient Name: ${session.patientName || "Not captured"}
+Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -479,16 +444,6 @@ Details: ${session.reason}`
           return;
         }
 
-        if (session.intent === "other-office") {
-          session.callTypeLabel = "Other Office";
-          session.stage = "ask-other-office-details";
-          sendTextToken(
-            ws,
-            "What dental office or lab are you calling from, and what question do you have?"
-          );
-          return;
-        }
-
         if (session.intent === "question") {
           session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
@@ -511,12 +466,31 @@ Details: ${session.reason}`
         if (isNewPatientConsultation(userText)) {
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
-          session.stage = "ask-new-patient-times";
+
+          await safeText(
+            officeLineTextNumber,
+            `📞 AI RECEPTIONIST
+Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Type: ${session.callTypeLabel}
+Appointment type: ${session.appointmentType}`
+          );
 
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. What days and times do you prefer?"
+            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
           );
+
+          setTimeout(() => {
+            endConversation(ws, {
+              reason: "new-patient-consultation",
+              callSid: session.callSid,
+              patientName: session.patientName,
+              intent: session.intent,
+            });
+          }, 14500);
+
+          sessions.delete(session.callSid);
           return;
         }
 
@@ -525,36 +499,6 @@ Details: ${session.reason}`
           ws,
           "Thank you. What days and times usually work best for you?"
         );
-        return;
-      }
-
-      if (session.stage === "ask-new-patient-times") {
-        session.preferredTimes = userText;
-
-        await safeText(
-          officeLineTextNumber,
-          `${getCallTypeHeader(session)}
-Patient Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Appointment type: ${session.appointmentType || "Not captured"}
-Preferred days/times: ${session.preferredTimes || "Not captured"}`
-        );
-
-        sendTextToken(
-          ws,
-          "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
-        );
-
-        setTimeout(() => {
-          endConversation(ws, {
-            reason: "new-patient-consultation",
-            callSid: session.callSid,
-            patientName: session.patientName,
-            intent: session.intent,
-          });
-        }, 14500);
-
-        sessions.delete(session.callSid);
         return;
       }
 
@@ -568,15 +512,6 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
 
       if (session.stage === "ask-question-details") {
         session.reason = userText;
-        session.stage = "finish";
-        await finalizeAndNotify(session, ws);
-        sessions.delete(session.callSid);
-        return;
-      }
-
-      if (session.stage === "ask-other-office-details") {
-        session.reason = userText;
-        session.officeName = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
@@ -598,33 +533,19 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
         session.stage = "ask-same-day-availability";
         sendTextToken(
           ws,
-          "Thank you. We want to address this issue as soon as possible. Are you available today? Please say yes or no."
+          "Thank you. We want to address this issue as soon as possible. Are you available today?"
         );
         return;
       }
 
       if (session.stage === "ask-same-day-availability") {
-        const answer = userText.toLowerCase();
         session.sameDayAvailability = userText;
 
-        if (
-          !answer.includes("yes") &&
-          !answer.includes("yeah") &&
-          !answer.includes("yep") &&
-          !answer.includes("no") &&
-          !answer.includes("nope")
-        ) {
-          sendTextToken(
-            ws,
-            "I'm sorry, I didn't catch that. Are you available today? Please say yes or no."
-          );
-          return;
-        }
-
         const lines = [
-          getCallTypeHeader(session),
-          `Patient Name: ${session.patientName || "Not captured"}`,
+          "📞 AI RECEPTIONIST",
+          `Name: ${session.patientName || "Not captured"}`,
           `Caller: ${session.callerNumber || "Unknown"}`,
+          `Type: ${session.callTypeLabel || "Comfort Visit"}`,
         ];
 
         if (session.severity) {
@@ -641,17 +562,10 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
 
         await safeText(officeLineTextNumber, lines.join("\n"));
 
-        if (answer.includes("yes") || answer.includes("yeah") || answer.includes("yep")) {
-          sendTextToken(
-            ws,
-            "Great. We will get back to you shortly with available times."
-          );
-        } else {
-          sendTextToken(
-            ws,
-            "Thank you. We will share this with the team, and someone will get back to you shortly."
-          );
-        }
+        sendTextToken(
+          ws,
+          "Great. We will get back to you shortly with available times."
+        );
 
         setTimeout(() => {
           endConversation(ws, {

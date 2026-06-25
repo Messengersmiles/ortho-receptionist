@@ -333,6 +333,8 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
         } else if (session.stage === "ask-urgency") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe this as mild discomfort, urgent, or an emergency?");
+        } else if (session.stage === "ask-question-details") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Please tell me your question, and I'll pass it along to the team.");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -408,6 +410,15 @@ Next step: Contact patient immediately`
           return;
         }
 
+        if (session.intent === "question") {
+          session.stage = "ask-question-details";
+          sendTextToken(
+            ws,
+            "Of course. Please tell me your question, and I'll pass it along to the team."
+          );
+          return;
+        }
+
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
@@ -424,6 +435,14 @@ Next step: Contact patient immediately`
 
       if (session.stage === "ask-urgency") {
         session.urgency = userText;
+        session.stage = "finish";
+        await finalizeAndNotify(session, ws);
+        sessions.delete(session.callSid);
+        return;
+      }
+
+      if (session.stage === "ask-question-details") {
+        session.reason = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);

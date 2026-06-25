@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "7YaUDeaStRuoYg3FKsmU";
+const ELEVENLABS_VOICE = "tnSpp4vdxKPjI9w0GnoV";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -178,6 +178,24 @@ function classifyIntent(text) {
   }
 
   if (
+    t.includes("other office") ||
+    t.includes("office") ||
+    t.includes("dental office") ||
+    t.includes("dentist") ||
+    t.includes("doctor") ||
+    t.includes("lab") ||
+    t.includes("dental lab") ||
+    t.includes("records") ||
+    t.includes("x ray") ||
+    t.includes("x-ray") ||
+    t.includes("xrays") ||
+    t.includes("x rays") ||
+    t.includes("referral")
+  ) {
+    return "other-office";
+  }
+
+  if (
     t.includes("question") ||
     t.includes("insurance") ||
     t.includes("billing") ||
@@ -212,6 +230,20 @@ function isNewPatientConsultation(text) {
   );
 }
 
+function getCallTypeHeader(session) {
+  const type = (session.callTypeLabel || "").toUpperCase();
+
+  if (type === "NEW PATIENT CONSULTATION") return "🔥 NEW PATIENT CONSULTATION";
+  if (type === "SCHEDULE") return "📅 SCHEDULE";
+  if (type === "RESCHEDULE") return "🔁 RESCHEDULE";
+  if (type === "COMFORT VISIT") return "🦷 COMFORT VISIT";
+  if (type === "QUESTION") return "❓ QUESTION";
+  if (type === "OTHER OFFICE") return "🏢 OTHER OFFICE";
+  if (type === "EMERGENCY") return "🚨 EMERGENCY";
+
+  return "📞 CALL";
+}
+
 function sendTextToken(ws, token, last = true) {
   ws.send(
     JSON.stringify({
@@ -235,35 +267,38 @@ function endConversation(ws, handoffData = {}) {
 
 async function finalizeAndNotify(session, ws) {
   const lines = [
-    "📞 AI RECEPTIONIST",
-    `Name: ${session.patientName || "Not captured"}`,
+    getCallTypeHeader(session),
+    `Patient Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
-  if (session.callTypeLabel) {
-    lines.push(`Type: ${session.callTypeLabel}`);
-  } else if (session.intent) {
-    lines.push(`Type: ${session.intent}`);
-  }
+  if (session.callTypeLabel === "Other Office") {
+    if (session.officeName) {
+      lines.push(`Office/Lab: ${session.officeName}`);
+    }
+    if (session.reason) {
+      lines.push(`Question/Notes: ${session.reason}`);
+    }
+  } else {
+    if (session.appointmentType && session.callTypeLabel !== "New Patient Consultation") {
+      lines.push(`Appointment type: ${session.appointmentType}`);
+    }
 
-  if (session.appointmentType) {
-    lines.push(`Appointment type: ${session.appointmentType}`);
-  }
+    if (session.preferredTimes) {
+      lines.push(`Preferred days/times: ${session.preferredTimes}`);
+    }
 
-  if (session.preferredTimes) {
-    lines.push(`Preferred days/times: ${session.preferredTimes}`);
-  }
+    if (session.severity) {
+      lines.push(`Severity: ${session.severity}`);
+    }
 
-  if (session.severity) {
-    lines.push(`Severity: ${session.severity}`);
-  }
+    if (session.sameDayAvailability) {
+      lines.push(`Available today: ${session.sameDayAvailability}`);
+    }
 
-  if (session.sameDayAvailability) {
-    lines.push(`Available today: ${session.sameDayAvailability}`);
-  }
-
-  if (session.reason && !session.appointmentType) {
-    lines.push(`Question/Notes: ${session.reason}`);
+    if (session.reason && !session.appointmentType) {
+      lines.push(`Question/Notes: ${session.reason}`);
+    }
   }
 
   await safeText(officeLineTextNumber, lines.join("\n"));
@@ -319,6 +354,7 @@ wss.on("connection", (ws) => {
           patientName: "",
           intent: "",
           callTypeLabel: "",
+          officeName: "",
           reason: "",
           appointmentType: "",
           preferredTimes: "",
@@ -350,8 +386,12 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, retainer check, or new retainer.");
         } else if (session.stage === "ask-times") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
+        } else if (session.stage === "ask-new-patient-times") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times do you prefer?");
         } else if (session.stage === "ask-question-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What would you like to ask the team?");
+        } else if (session.stage === "ask-other-office-details") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What dental office or lab are you calling from, and what question do you have?");
         } else if (session.stage === "ask-comfort-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
         } else if (session.stage === "ask-severity") {
@@ -370,7 +410,7 @@ wss.on("connection", (ws) => {
 
         sendTextToken(
           ws,
-          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, or ask a question."
+          "Thank you. How can we help today? You can say schedule an appointment, reschedule, comfort visit, ask a question, or other office."
         );
         return;
       }
@@ -384,16 +424,16 @@ wss.on("connection", (ws) => {
 
           await safeText(
             doctorEmergencyNumber,
-            `🚨 POSSIBLE ORTHO EMERGENCY
-Name: ${session.patientName || "Not captured"}
+            `🚨 EMERGENCY
+Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
 
           await safeText(
             officeLineTextNumber,
-            `🚨 POSSIBLE ORTHO EMERGENCY
-Name: ${session.patientName || "Not captured"}
+            `🚨 EMERGENCY
+Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -444,6 +484,16 @@ Details: ${session.reason}`
           return;
         }
 
+        if (session.intent === "other-office") {
+          session.callTypeLabel = "Other Office";
+          session.stage = "ask-other-office-details";
+          sendTextToken(
+            ws,
+            "What dental office or lab are you calling from, and what question do you have?"
+          );
+          return;
+        }
+
         if (session.intent === "question") {
           session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
@@ -466,31 +516,12 @@ Details: ${session.reason}`
         if (isNewPatientConsultation(userText)) {
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
-
-          await safeText(
-            officeLineTextNumber,
-            `📞 AI RECEPTIONIST
-Name: ${session.patientName || "Not captured"}
-Caller: ${session.callerNumber || "Unknown"}
-Type: ${session.callTypeLabel}
-Appointment type: ${session.appointmentType}`
-          );
+          session.stage = "ask-new-patient-times";
 
           sendTextToken(
             ws,
-            "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
+            "Awesome! We treat the entire family, children, teens, and adults. What days and times do you prefer?"
           );
-
-          setTimeout(() => {
-            endConversation(ws, {
-              reason: "new-patient-consultation",
-              callSid: session.callSid,
-              patientName: session.patientName,
-              intent: session.intent,
-            });
-          }, 14500);
-
-          sessions.delete(session.callSid);
           return;
         }
 
@@ -499,6 +530,35 @@ Appointment type: ${session.appointmentType}`
           ws,
           "Thank you. What days and times usually work best for you?"
         );
+        return;
+      }
+
+      if (session.stage === "ask-new-patient-times") {
+        session.preferredTimes = userText;
+
+        await safeText(
+          officeLineTextNumber,
+          `${getCallTypeHeader(session)}
+Patient Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Preferred days/times: ${session.preferredTimes || "Not captured"}`
+        );
+
+        sendTextToken(
+          ws,
+          "Thank you. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
+        );
+
+        setTimeout(() => {
+          endConversation(ws, {
+            reason: "new-patient-consultation",
+            callSid: session.callSid,
+            patientName: session.patientName,
+            intent: session.intent,
+          });
+        }, 12000);
+
+        sessions.delete(session.callSid);
         return;
       }
 
@@ -511,6 +571,16 @@ Appointment type: ${session.appointmentType}`
       }
 
       if (session.stage === "ask-question-details") {
+        session.reason = userText;
+        session.stage = "finish";
+        await finalizeAndNotify(session, ws);
+        sessions.delete(session.callSid);
+        return;
+      }
+
+      if (session.stage === "ask-other-office-details") {
+        const parts = userText.split(/,|\.| and /i);
+        session.officeName = parts[0] ? parts[0].trim() : userText;
         session.reason = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
@@ -557,10 +627,9 @@ Appointment type: ${session.appointmentType}`
         }
 
         const lines = [
-          "📞 AI RECEPTIONIST",
-          `Name: ${session.patientName || "Not captured"}`,
+          getCallTypeHeader(session),
+          `Patient Name: ${session.patientName || "Not captured"}`,
           `Caller: ${session.callerNumber || "Unknown"}`,
-          `Type: ${session.callTypeLabel || "Comfort Visit"}`,
         ];
 
         if (session.severity) {

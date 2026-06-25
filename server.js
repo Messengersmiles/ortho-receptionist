@@ -19,11 +19,10 @@ const client = twilio(accountSid, authToken);
 const twilioNumber = "+17144770304";
 const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
-const bookingLink = "https://www.messenger-smiles.com/bookOnline";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
 
-// Riley
+// Riley voice
 const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
 
 // Set to "A" or "B" if you ever want to force the Tuesday lunch pattern manually.
@@ -236,8 +235,13 @@ async function finalizeAndNotify(session, ws) {
     `Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
     `Request: ${session.intent || "Unknown"}`,
-    `Details: ${session.reason || "None provided"}`,
   ];
+
+  if (session.appointmentType) {
+    lines.push(`Appointment type: ${session.appointmentType}`);
+  }
+
+  lines.push(`Details: ${session.reason || "None provided"}`);
 
   if (session.preferredTimes) {
     lines.push(`Preferred days/times: ${session.preferredTimes}`);
@@ -253,7 +257,7 @@ async function finalizeAndNotify(session, ws) {
 
   sendTextToken(
     ws,
-    "Perfect. I've passed your information to our team, and someone will follow up with you shortly."
+    "Thank you. I passed your information to the team."
   );
 
   setTimeout(() => {
@@ -263,7 +267,7 @@ async function finalizeAndNotify(session, ws) {
       patientName: session.patientName,
       intent: session.intent,
     });
-  }, 2500);
+  }, 4500);
 }
 
 // ===== INBOUND CALL WEBHOOK =====
@@ -302,6 +306,7 @@ wss.on("connection", (ws) => {
           patientName: "",
           intent: "",
           reason: "",
+          appointmentType: "",
           preferredTimes: "",
           urgency: "",
           stage: "ask-name",
@@ -309,10 +314,7 @@ wss.on("connection", (ws) => {
 
         sessions.set(msg.callSid, session);
 
-        sendTextToken(
-          ws,
-          "Please say the patient's first and last name."
-        );
+        sendTextToken(ws, "Please say the patient's first and last name.");
         return;
       }
 
@@ -329,6 +331,8 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say the patient's first and last name.");
         } else if (session.stage === "ask-reason") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please briefly tell me what you need help with today.");
+        } else if (session.stage === "ask-appointment-type") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What kind of appointment is this for? For example, a new patient consultation, braces appointment, comfort visit, retainer check, or new retainer.");
         } else if (session.stage === "ask-times") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times usually work best for you?");
         } else if (session.stage === "ask-urgency") {
@@ -393,10 +397,10 @@ Next step: Contact patient immediately`
         }
 
         if (session.intent === "schedule" || session.intent === "reschedule") {
-          session.stage = "ask-times";
+          session.stage = "ask-appointment-type";
           sendTextToken(
             ws,
-            "Got it. What days and times usually work best for you?"
+            "Got it. What kind of appointment is this for? For example, a new patient consultation, braces appointment, comfort visit, retainer check, or new retainer."
           );
           return;
         }
@@ -422,6 +426,16 @@ Next step: Contact patient immediately`
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
+        return;
+      }
+
+      if (session.stage === "ask-appointment-type") {
+        session.appointmentType = userText;
+        session.stage = "ask-times";
+        sendTextToken(
+          ws,
+          "Thank you. What days and times usually work best for you?"
+        );
         return;
       }
 

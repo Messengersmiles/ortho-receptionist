@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
+const ELEVENLABS_VOICE = "7YaUDeaStRuoYg3FKsmU";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -357,7 +357,7 @@ wss.on("connection", (ws) => {
         } else if (session.stage === "ask-severity") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, or urgent?");
         } else if (session.stage === "ask-same-day-availability") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today? Please say yes or no.");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -533,13 +533,28 @@ Appointment type: ${session.appointmentType}`
         session.stage = "ask-same-day-availability";
         sendTextToken(
           ws,
-          "Thank you. We want to address this issue as soon as possible. Are you available today?"
+          "Thank you. We want to address this issue as soon as possible. Are you available today? Please say yes or no."
         );
         return;
       }
 
       if (session.stage === "ask-same-day-availability") {
+        const answer = userText.toLowerCase();
         session.sameDayAvailability = userText;
+
+        if (
+          !answer.includes("yes") &&
+          !answer.includes("yeah") &&
+          !answer.includes("yep") &&
+          !answer.includes("no") &&
+          !answer.includes("nope")
+        ) {
+          sendTextToken(
+            ws,
+            "I'm sorry, I didn't catch that. Are you available today? Please say yes or no."
+          );
+          return;
+        }
 
         const lines = [
           "📞 AI RECEPTIONIST",
@@ -562,10 +577,17 @@ Appointment type: ${session.appointmentType}`
 
         await safeText(officeLineTextNumber, lines.join("\n"));
 
-        sendTextToken(
-          ws,
-          "Great. We will get back to you shortly with available times."
-        );
+        if (answer.includes("yes") || answer.includes("yeah") || answer.includes("yep")) {
+          sendTextToken(
+            ws,
+            "Great. We will get back to you shortly with available times."
+          );
+        } else {
+          sendTextToken(
+            ws,
+            "Thank you. We will share this with the team, and someone will get back to you shortly."
+          );
+        }
 
         setTimeout(() => {
           endConversation(ws, {

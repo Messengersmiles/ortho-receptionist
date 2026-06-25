@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
+const ELEVENLABS_VOICE = "jqcCZkN6Knx8BJ5TBdYR";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -355,7 +355,7 @@ wss.on("connection", (ws) => {
         } else if (session.stage === "ask-comfort-details") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. In a few words, please let us know what is going on.");
         } else if (session.stage === "ask-severity") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, urgent, or an emergency?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, or urgent?");
         } else if (session.stage === "ask-same-day-availability") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today?");
         } else {
@@ -523,7 +523,7 @@ Appointment type: ${session.appointmentType}`
         session.stage = "ask-severity";
         sendTextToken(
           ws,
-          "Would you describe it as mild, moderate, urgent, or an emergency?"
+          "Would you describe it as mild, moderate, or urgent?"
         );
         return;
       }
@@ -541,17 +541,42 @@ Appointment type: ${session.appointmentType}`
       if (session.stage === "ask-same-day-availability") {
         session.sameDayAvailability = userText;
 
+        const lines = [
+          "📞 AI RECEPTIONIST",
+          `Name: ${session.patientName || "Not captured"}`,
+          `Caller: ${session.callerNumber || "Unknown"}`,
+          `Type: ${session.callTypeLabel || "Comfort Visit"}`,
+        ];
+
+        if (session.severity) {
+          lines.push(`Severity: ${session.severity}`);
+        }
+
+        if (session.sameDayAvailability) {
+          lines.push(`Available today: ${session.sameDayAvailability}`);
+        }
+
+        if (session.reason) {
+          lines.push(`Question/Notes: ${session.reason}`);
+        }
+
+        await safeText(officeLineTextNumber, lines.join("\n"));
+
         sendTextToken(
           ws,
-          "We will get back to you shortly with available times."
+          "Great. We will get back to you shortly with available times."
         );
 
-        setTimeout(async () => {
-          session.stage = "finish";
-          await finalizeAndNotify(session, ws);
-          sessions.delete(session.callSid);
-        }, 2500);
+        setTimeout(() => {
+          endConversation(ws, {
+            reason: "comfort-visit-complete",
+            callSid: session.callSid,
+            patientName: session.patientName,
+            intent: session.intent,
+          });
+        }, 3500);
 
+        sessions.delete(session.callSid);
         return;
       }
     } catch (err) {

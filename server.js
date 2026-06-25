@@ -105,7 +105,7 @@ function getTuesdayLunchPattern(now = new Date()) {
   const anchorTuesdayUtc = new Date("2026-03-31T12:00:00Z");
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const diffMs = now.getTime() - anchorTuesdayUtc.getTime();
-  the weeksFromAnchor = Math.floor(diffMs / msPerWeek);
+  const weeksFromAnchor = Math.floor(diffMs / msPerWeek);
 
   return Math.abs(weeksFromAnchor) % 2 === 0 ? "A" : "B";
 }

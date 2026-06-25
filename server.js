@@ -240,6 +240,12 @@ async function finalizeAndNotify(session, ws) {
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
+  if (session.callTypeLabel) {
+    lines.push(`Type: ${session.callTypeLabel}`);
+  } else if (session.intent) {
+    lines.push(`Type: ${session.intent}`);
+  }
+
   if (session.appointmentType) {
     lines.push(`Appointment type: ${session.appointmentType}`);
   }
@@ -253,7 +259,7 @@ async function finalizeAndNotify(session, ws) {
   }
 
   if (session.sameDayAvailability) {
-    lines.push(`Available today around 4:40: ${session.sameDayAvailability}`);
+    lines.push(`Available today: ${session.sameDayAvailability}`);
   }
 
   if (session.reason && !session.appointmentType) {
@@ -312,6 +318,7 @@ wss.on("connection", (ws) => {
           callerNumber: formatPhoneNumber(msg.from || ""),
           patientName: "",
           intent: "",
+          callTypeLabel: "",
           reason: "",
           appointmentType: "",
           preferredTimes: "",
@@ -350,7 +357,7 @@ wss.on("connection", (ws) => {
         } else if (session.stage === "ask-severity") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, urgent, or an emergency?");
         } else if (session.stage === "ask-same-day-availability") {
-          sendTextToken(ws, "I'm sorry, I didn't catch that. If we are able to see you today, would you be available toward the end of the day, around 4 40?");
+          sendTextToken(ws, "I'm sorry, I didn't catch that. We want to make sure you are comfortable and see you as soon as possible. Are you available today?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -373,6 +380,8 @@ wss.on("connection", (ws) => {
         session.intent = classifyIntent(userText);
 
         if (looksEmergency(userText)) {
+          session.callTypeLabel = "Emergency";
+
           await safeText(
             doctorEmergencyNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
@@ -406,6 +415,7 @@ Details: ${session.reason}`
         }
 
         if (session.intent === "reschedule") {
+          session.callTypeLabel = "Reschedule";
           session.stage = "ask-times";
           sendTextToken(
             ws,
@@ -415,6 +425,7 @@ Details: ${session.reason}`
         }
 
         if (session.intent === "schedule") {
+          session.callTypeLabel = "Schedule";
           session.stage = "ask-appointment-type";
           sendTextToken(
             ws,
@@ -424,6 +435,7 @@ Details: ${session.reason}`
         }
 
         if (session.intent === "comfort-visit") {
+          session.callTypeLabel = "Comfort Visit";
           session.stage = "ask-comfort-details";
           sendTextToken(
             ws,
@@ -433,6 +445,7 @@ Details: ${session.reason}`
         }
 
         if (session.intent === "question") {
+          session.callTypeLabel = "Question";
           session.stage = "ask-question-details";
           sendTextToken(
             ws,
@@ -451,6 +464,7 @@ Details: ${session.reason}`
         session.appointmentType = userText;
 
         if (isNewPatientConsultation(userText)) {
+          session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
 
           await safeText(
@@ -458,6 +472,7 @@ Details: ${session.reason}`
             `📞 AI RECEPTIONIST
 Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
+Type: ${session.callTypeLabel}
 Appointment type: ${session.appointmentType}`
           );
 
@@ -518,7 +533,7 @@ Appointment type: ${session.appointmentType}`
         session.stage = "ask-same-day-availability";
         sendTextToken(
           ws,
-          "Thank you. We want to make sure we are able to properly address your concern, and a team member will get back to you with available times to see you today. If we are able to see you today, would you be available toward the end of the day, around 4 40?"
+          "Thank you. We want to make sure you are comfortable and see you as soon as possible. Are you available today? If so, we will get back to you with times we have available."
         );
         return;
       }

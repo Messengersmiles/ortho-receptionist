@@ -231,7 +231,7 @@ function getTextHeader(typeLabel) {
     case "Schedule":
       return "📅 Schedule Appointment";
     case "Reschedule":
-      return "➡️ Reschedule";
+      return "Reschedule";
     case "Comfort Visit":
       return "❗ Comfort Visit";
     case "Question":

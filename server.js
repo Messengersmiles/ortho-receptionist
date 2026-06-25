@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "7YaUDeaStRuoYg3FKsmU";
+xctasy8XvGp2cVO9HL9k
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid

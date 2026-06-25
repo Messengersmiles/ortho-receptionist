@@ -393,6 +393,8 @@ wss.on("connection", (ws) => {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Would you describe it as mild, moderate, or urgent?");
         } else if (session.stage === "ask-same-day-availability") {
           sendTextToken(ws, "I'm sorry, I didn't catch that. We want to address this issue as soon as possible. Are you available today? Please say yes or no.");
+        } else if (session.stage === "ask-new-patient-times") {
+          sendTextToken(ws, "I'm sorry, I didn't catch that. What days and times work best for you?");
         } else {
           sendTextToken(ws, "I'm sorry, I didn't catch that. Please say that one more time.");
         }
@@ -512,11 +514,10 @@ Details: ${session.reason}`
           session.callTypeLabel = "New Patient Consultation";
           session.reason = "New patient consultation";
 
-          // Ask preferred days/times first
           session.stage = "ask-new-patient-times";
           sendTextToken(
             ws,
-            "Thank you. What days and times usually work best for you for your consultation?"
+            "Great! We treat the whole family, children, teens, and adults. What days and times work best for you?"
           );
           return;
         }

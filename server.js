@@ -224,6 +224,27 @@ function isNewPatientConsultation(text) {
   );
 }
 
+function getTextHeader(typeLabel) {
+  switch (typeLabel) {
+    case "New Patient Consultation":
+      return "🔥 New Patient Consultation";
+    case "Schedule":
+      return "📅 Schedule Appointment";
+    case "Reschedule":
+      return "➡️ Reschedule";
+    case "Comfort Visit":
+      return "❗ Comfort Visit";
+    case "Question":
+      return "❓ Question";
+    case "Other Office":
+      return "🏢 Other Office";
+    case "Call":
+      return "📞 Call";
+    default:
+      return `📞 ${typeLabel || "Call"}`;
+  }
+}
+
 function sendTextToken(ws, token, last = true) {
   ws.send(
     JSON.stringify({
@@ -247,27 +268,21 @@ function endConversation(ws, handoffData = {}) {
 
 async function notifyIncompleteCall(session) {
   const lines = [
-    "📞 AI RECEPTIONIST",
+    getTextHeader("Call"),
     `Patient Name: ${session.patientName || "No answer"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
-    "Type: Call",
   ];
 
   await safeText(officeLineTextNumber, lines.join("\n"));
 }
 
 async function finalizeAndNotify(session, ws) {
+  const resolvedType = session.callTypeLabel || session.intent || "Call";
   const lines = [
-    "📞 AI RECEPTIONIST",
+    getTextHeader(resolvedType),
     `Patient Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
-
-  if (session.callTypeLabel) {
-    lines.push(`Type: ${session.callTypeLabel}`);
-  } else if (session.intent) {
-    lines.push(`Type: ${session.intent}`);
-  }
 
   if (session.appointmentType) {
     lines.push(`Appointment type: ${session.appointmentType}`);
@@ -312,10 +327,9 @@ async function finalizeAndNotify(session, ws) {
 
 async function finalizeNewPatientConsultation(session, ws) {
   const lines = [
-    "📞 AI RECEPTIONIST",
+    getTextHeader("New Patient Consultation"),
     `Patient Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
-    `Type: ${session.callTypeLabel || "New Patient Consultation"}`,
   ];
 
   if (session.appointmentType) {
@@ -625,10 +639,9 @@ Details: ${session.reason}`
         session.sameDayAvailability = userText;
 
         const lines = [
-          "📞 AI RECEPTIONIST",
+          getTextHeader(session.callTypeLabel || "Comfort Visit"),
           `Patient Name: ${session.patientName || "Not captured"}`,
           `Caller: ${session.callerNumber || "Unknown"}`,
-          `Type: ${session.callTypeLabel || "Comfort Visit"}`,
         ];
 
         if (session.severity) {

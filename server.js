@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "tnSpp4vdxKPjI9w0GnoV";
+const ELEVENLABS_VOICE = "gJx1vCzNCD1EQHT212Ls";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -272,33 +272,28 @@ async function finalizeAndNotify(session, ws) {
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
-  if (session.callTypeLabel === "Other Office") {
-    if (session.officeName) {
-      lines.push(`Office/Lab: ${session.officeName}`);
-    }
-    if (session.reason) {
-      lines.push(`Question/Notes: ${session.reason}`);
-    }
-  } else {
-    if (session.appointmentType && session.callTypeLabel !== "New Patient Consultation") {
-      lines.push(`Appointment type: ${session.appointmentType}`);
-    }
+  if (session.appointmentType) {
+    lines.push(`Appointment type: ${session.appointmentType}`);
+  }
 
-    if (session.preferredTimes) {
-      lines.push(`Preferred days/times: ${session.preferredTimes}`);
-    }
+  if (session.preferredTimes) {
+    lines.push(`Preferred days/times: ${session.preferredTimes}`);
+  }
 
-    if (session.severity) {
-      lines.push(`Severity: ${session.severity}`);
-    }
+  if (session.severity) {
+    lines.push(`Severity: ${session.severity}`);
+  }
 
-    if (session.sameDayAvailability) {
-      lines.push(`Available today: ${session.sameDayAvailability}`);
-    }
+  if (session.sameDayAvailability) {
+    lines.push(`Available today: ${session.sameDayAvailability}`);
+  }
 
-    if (session.reason && !session.appointmentType) {
-      lines.push(`Question/Notes: ${session.reason}`);
-    }
+  if (session.callTypeLabel === "Other Office" && session.officeName) {
+    lines.push(`Dental Office/Lab: ${session.officeName}`);
+  }
+
+  if (session.reason && !session.appointmentType) {
+    lines.push(`Question/Notes: ${session.reason}`);
   }
 
   await safeText(officeLineTextNumber, lines.join("\n"));
@@ -354,8 +349,8 @@ wss.on("connection", (ws) => {
           patientName: "",
           intent: "",
           callTypeLabel: "",
-          officeName: "",
           reason: "",
+          officeName: "",
           appointmentType: "",
           preferredTimes: "",
           severity: "",
@@ -546,7 +541,7 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
 
         sendTextToken(
           ws,
-          "Thank you. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
+          "Awesome! We treat the entire family, children, teens, and adults. A team member will get back to you shortly to set something up. You can also book online at messenger dash smiles dot com. We look forward to meeting you."
         );
 
         setTimeout(() => {
@@ -556,7 +551,7 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
             patientName: session.patientName,
             intent: session.intent,
           });
-        }, 12000);
+        }, 14500);
 
         sessions.delete(session.callSid);
         return;
@@ -579,9 +574,8 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
       }
 
       if (session.stage === "ask-other-office-details") {
-        const parts = userText.split(/,|\.| and /i);
-        session.officeName = parts[0] ? parts[0].trim() : userText;
         session.reason = userText;
+        session.officeName = userText;
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);

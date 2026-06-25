@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "gJx1vCzNCD1EQHT212Ls";
+const ELEVENLABS_VOICE = "7YaUDeaStRuoYg3FKsmU";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -212,19 +212,6 @@ function isNewPatientConsultation(text) {
   );
 }
 
-function getCallTypeHeader(session) {
-  const type = (session.callTypeLabel || "").toUpperCase();
-
-  if (type === "NEW PATIENT CONSULTATION") return "🔥 NEW PATIENT CONSULTATION";
-  if (type === "SCHEDULE") return "📅 SCHEDULE";
-  if (type === "RESCHEDULE") return "🔁 RESCHEDULE";
-  if (type === "COMFORT VISIT") return "🦷 COMFORT VISIT";
-  if (type === "QUESTION") return "❓ QUESTION";
-  if (type === "EMERGENCY") return "🚨 EMERGENCY";
-
-  return "📞 CALL";
-}
-
 function sendTextToken(ws, token, last = true) {
   ws.send(
     JSON.stringify({
@@ -248,10 +235,16 @@ function endConversation(ws, handoffData = {}) {
 
 async function finalizeAndNotify(session, ws) {
   const lines = [
-    getCallTypeHeader(session),
+    "📞 AI RECEPTIONIST",
     `Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
+
+  if (session.callTypeLabel) {
+    lines.push(`Type: ${session.callTypeLabel}`);
+  } else if (session.intent) {
+    lines.push(`Type: ${session.intent}`);
+  }
 
   if (session.appointmentType) {
     lines.push(`Appointment type: ${session.appointmentType}`);
@@ -391,7 +384,7 @@ wss.on("connection", (ws) => {
 
           await safeText(
             doctorEmergencyNumber,
-            `🚨 EMERGENCY
+            `🚨 POSSIBLE ORTHO EMERGENCY
 Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
@@ -399,7 +392,7 @@ Details: ${session.reason}`
 
           await safeText(
             officeLineTextNumber,
-            `🚨 EMERGENCY
+            `🚨 POSSIBLE ORTHO EMERGENCY
 Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
@@ -476,9 +469,10 @@ Details: ${session.reason}`
 
           await safeText(
             officeLineTextNumber,
-            `${getCallTypeHeader(session)}
+            `📞 AI RECEPTIONIST
 Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
+Type: ${session.callTypeLabel}
 Appointment type: ${session.appointmentType}`
           );
 
@@ -563,9 +557,10 @@ Appointment type: ${session.appointmentType}`
         }
 
         const lines = [
-          getCallTypeHeader(session),
+          "📞 AI RECEPTIONIST",
           `Name: ${session.patientName || "Not captured"}`,
           `Caller: ${session.callerNumber || "Unknown"}`,
+          `Type: ${session.callTypeLabel || "Comfort Visit"}`,
         ];
 
         if (session.severity) {

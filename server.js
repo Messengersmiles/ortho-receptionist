@@ -344,7 +344,7 @@ async function finalizeNewPatientConsultation(session, ws) {
 
   sendTextToken(
     ws,
-    "The team will get back to you soon with some options. In the meantime, if you'd like to check availability and or book online, please visit messenger dash smiles dot com."
+    "The team will get back to you shortly. In the meantime, if you'd like to check availability and or book online, please visit messenger dash smiles dot com."
   );
 
   setTimeout(() => {
@@ -368,8 +368,8 @@ app.post("/voice", (req, res) => {
     voice: ELEVENLABS_VOICE,
     interruptible: "speech",
     welcomeGreeting: isLunchHour()
-      ? "Hi, thank you for calling Messenger Orthodontics. Our team is away from the desk for lunch right now, but I'm a virtual receptionist and I can help take your message."
-      : "Hi, thank you for calling Messenger Orthodontics. Our team is currently with patients, but I'm a virtual receptionist and I can help take your message.",
+      ? Hi, thank you for calling Messenger Orthodontics. Our team is currently at lunch, but I'm a virtual receptionist and I'm here to gather a few details so our team can better assist you when they return."
+      : "Hi, thank you for calling Messenger Orthodontics. Our team is with patients right now, but I'm a virtual receptionist and I'm here to gather a few details so our team can better assist you.",
   });
 
   res.type("text/xml");
@@ -602,7 +602,7 @@ Details: ${session.reason}`
         session.stage = "ask-other-office-question";
         sendTextToken(
           ws,
-          "Thank you. What question do you have for the team?"
+          "Thank you. In a few words, what question do you have for the team?"
         );
         return;
       }

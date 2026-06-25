@@ -269,7 +269,7 @@ function endConversation(ws, handoffData = {}) {
 async function notifyIncompleteCall(session) {
   const lines = [
     getTextHeader("Call"),
-    `Patient Name: ${session.patientName || "No answer"}`,
+    `Patient: ${session.patientName || "No answer"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
@@ -280,7 +280,7 @@ async function finalizeAndNotify(session, ws) {
   const resolvedType = session.callTypeLabel || session.intent || "Call";
   const lines = [
     getTextHeader(resolvedType),
-    `Patient Name: ${session.patientName || "Not captured"}`,
+    `Patient: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
@@ -328,7 +328,7 @@ async function finalizeAndNotify(session, ws) {
 async function finalizeNewPatientConsultation(session, ws) {
   const lines = [
     getTextHeader("New Patient Consultation"),
-    `Patient Name: ${session.patientName || "Not captured"}`,
+    `Patient: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
@@ -464,7 +464,7 @@ wss.on("connection", (ws) => {
           await safeText(
             doctorEmergencyNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
-Patient Name: ${session.patientName || "Not captured"}
+Patient: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -472,7 +472,7 @@ Details: ${session.reason}`
           await safeText(
             officeLineTextNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
-Patient Name: ${session.patientName || "Not captured"}
+Patient: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -640,7 +640,7 @@ Details: ${session.reason}`
 
         const lines = [
   getTextHeader(session.callTypeLabel || "Comfort Visit"),
-  `Patient Name: ${session.patientName || "Not captured"}`,
+  `Patient: ${session.patientName || "Not captured"}`,
   `Caller: ${session.callerNumber || "Unknown"}`,
 ];
 

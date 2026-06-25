@@ -679,4 +679,52 @@ Question/Notes: ${session.reason || "Not captured"}`
         } else {
           sendTextToken(
             ws,
-            
+            "Thank you. We will share this with the team, and someone will get back to you shortly."
+          );
+        }
+
+        setTimeout(() => {
+          endConversation(ws, {
+            reason: "comfort-visit-complete",
+            callSid: session.callSid,
+            patientName: session.patientName,
+            intent: session.intent,
+          });
+        }, 3500);
+
+        sessions.delete(session.callSid);
+        return;
+      }
+    } catch (err) {
+      console.error("WebSocket message error:", err.message);
+      try {
+        sendTextToken(
+          ws,
+          "I'm sorry, something went wrong. Please call us again in a moment."
+        );
+        endConversation(ws, { reason: "server-error" });
+      } catch (_) {}
+    }
+  });
+
+  ws.on("close", () => {
+    if (currentCallSid && sessions.has(currentCallSid)) {
+      sessions.delete(currentCallSid);
+    }
+  });
+
+  ws.on("error", (err) => {
+    console.error("WebSocket error:", err.message);
+  });
+});
+
+// ===== HEALTH CHECK =====
+app.get("/", (req, res) => {
+  res.send("Messenger Orthodontics Conversation Relay server is running.");
+});
+
+// ===== SERVER =====
+const PORT = process.env.PORT || 5050;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

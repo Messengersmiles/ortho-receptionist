@@ -245,6 +245,17 @@ function endConversation(ws, handoffData = {}) {
   );
 }
 
+async function notifyIncompleteCall(session) {
+  const lines = [
+    "📞 AI RECEPTIONIST",
+    `Patient Name: ${session.patientName || "No answer"}`,
+    `Caller: ${session.callerNumber || "Unknown"}`,
+    "Type: Call",
+  ];
+
+  await safeText(officeLineTextNumber, lines.join("\n"));
+}
+
 async function finalizeAndNotify(session, ws) {
   const lines = [
     "📞 AI RECEPTIONIST",
@@ -641,8 +652,16 @@ Appointment type: ${session.appointmentType}`
     }
   });
 
-  ws.on("close", () => {
+  ws.on("close", async () => {
     if (currentCallSid && sessions.has(currentCallSid)) {
+      const session = sessions.get(currentCallSid);
+
+      if (session && session.stage === "ask-name") {
+        await notifyIncompleteCall(session);
+      } else if (session && session.stage === "ask-reason" && !session.reason) {
+        await notifyIncompleteCall(session);
+      }
+
       sessions.delete(currentCallSid);
     }
   });

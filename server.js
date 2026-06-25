@@ -340,7 +340,7 @@ async function finalizeNewPatientConsultation(session, ws) {
       patientName: session.patientName,
       intent: session.intent,
     });
-  }, 9000);
+  }, 14000);
 }
 
 // ===== INBOUND CALL WEBHOOK =====

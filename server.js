@@ -21,7 +21,7 @@ const officeLineTextNumber = "+17149420707";
 const doctorEmergencyNumber = "+17145007127";
 
 const OFFICE_TIMEZONE = "America/Los_Angeles";
-const ELEVENLABS_VOICE = "hA4zGnmTwX2NQiTRMt7o";
+const ELEVENLABS_VOICE = "gJx1vCzNCD1EQHT212Ls";
 const TUESDAY_LUNCH_PATTERN_OVERRIDE = null;
 
 // In-memory call sessions by callSid
@@ -187,7 +187,6 @@ function classifyIntent(text) {
     return "question";
   }
 
-  // New intent for Other Office / Lab callers
   if (
     t.includes("other office") ||
     t.includes("other dentist") ||
@@ -249,7 +248,7 @@ function endConversation(ws, handoffData = {}) {
 async function finalizeAndNotify(session, ws) {
   const lines = [
     "📞 AI RECEPTIONIST",
-    `Name: ${session.patientName || "Not captured"}`,
+    `Patient Name: ${session.patientName || "Not captured"}`,
     `Caller: ${session.callerNumber || "Unknown"}`,
   ];
 
@@ -341,7 +340,7 @@ wss.on("connection", (ws) => {
           preferredTimes: "",
           severity: "",
           sameDayAvailability: "",
-          officeName: "", // NEW: track other office/lab name
+          officeName: "",
           stage: "ask-name",
         };
 
@@ -407,7 +406,7 @@ wss.on("connection", (ws) => {
           await safeText(
             doctorEmergencyNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
-Name: ${session.patientName || "Not captured"}
+Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -415,7 +414,7 @@ Details: ${session.reason}`
           await safeText(
             officeLineTextNumber,
             `🚨 POSSIBLE ORTHO EMERGENCY
-Name: ${session.patientName || "Not captured"}
+Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Details: ${session.reason}`
           );
@@ -476,10 +475,8 @@ Details: ${session.reason}`
           return;
         }
 
-        // NEW: Other Office branch
         if (session.intent === "other-office") {
           session.callTypeLabel = "Other Office";
-          // We will capture the office/lab name and then the question
           session.reason = "";
           session.stage = "ask-other-office-name";
           sendTextToken(
@@ -505,7 +502,7 @@ Details: ${session.reason}`
           await safeText(
             officeLineTextNumber,
             `📞 AI RECEPTIONIST
-Name: ${session.patientName || "Not captured"}
+Patient Name: ${session.patientName || "Not captured"}
 Caller: ${session.callerNumber || "Unknown"}
 Type: ${session.callTypeLabel}
 Appointment type: ${session.appointmentType}`
@@ -553,7 +550,6 @@ Appointment type: ${session.appointmentType}`
         return;
       }
 
-      // NEW: capture office/lab name
       if (session.stage === "ask-other-office-name") {
         session.officeName = userText;
         session.stage = "ask-other-office-question";
@@ -564,7 +560,6 @@ Appointment type: ${session.appointmentType}`
         return;
       }
 
-      // NEW: capture question from other office / lab
       if (session.stage === "ask-other-office-question") {
         session.reason = userText;
         session.stage = "finish";
@@ -598,7 +593,7 @@ Appointment type: ${session.appointmentType}`
 
         const lines = [
           "📞 AI RECEPTIONIST",
-          `Name: ${session.patientName || "Not captured"}`,
+          `Patient Name: ${session.patientName || "Not captured"}`,
           `Caller: ${session.callerNumber || "Unknown"}`,
           `Type: ${session.callTypeLabel || "Comfort Visit"}`,
         ];

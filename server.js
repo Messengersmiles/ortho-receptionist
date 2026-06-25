@@ -48,18 +48,20 @@ async function safeText(to, body) {
     const formattedTo = formatPhoneNumber(to);
     if (!formattedTo || !body) {
       console.log("Skipping text - invalid number or empty body:", to);
-      return;
+      return false;
     }
 
-    await client.messages.create({
+    const message = await client.messages.create({
       body,
       from: twilioNumber,
       to: formattedTo,
     });
 
-    console.log(`Text sent to ${formattedTo}`);
+    console.log(`Text sent to ${formattedTo}. SID: ${message.sid}`);
+    return true;
   } catch (err) {
     console.error(`Failed to text ${to}:`, err.message);
+    return false;
   }
 }
 
@@ -530,7 +532,6 @@ Details: ${session.reason}`
         return;
       }
 
-      // New patient consultation preferred times
       if (session.stage === "ask-new-patient-times") {
         session.preferredTimes = userText;
 
@@ -562,6 +563,34 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
 
       if (session.stage === "ask-times") {
         session.preferredTimes = userText;
+
+        if (session.callTypeLabel === "Reschedule") {
+          await safeText(
+            officeLineTextNumber,
+            `${getCallTypeHeader(session)}
+Patient Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Preferred days/times: ${session.preferredTimes || "Not captured"}`
+          );
+
+          sendTextToken(
+            ws,
+            "Great. I will send this to the team and someone will get back to you shortly with alternative appointment options."
+          );
+
+          setTimeout(() => {
+            endConversation(ws, {
+              reason: "reschedule-complete",
+              callSid: session.callSid,
+              patientName: session.patientName,
+              intent: session.intent,
+            });
+          }, 7000);
+
+          sessions.delete(session.callSid);
+          return;
+        }
+
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);
@@ -570,8 +599,29 @@ Preferred days/times: ${session.preferredTimes || "Not captured"}`
 
       if (session.stage === "ask-question-details") {
         session.reason = userText;
-        session.stage = "finish";
-        await finalizeAndNotify(session, ws);
+
+        await safeText(
+          officeLineTextNumber,
+          `${getCallTypeHeader(session)}
+Patient Name: ${session.patientName || "Not captured"}
+Caller: ${session.callerNumber || "Unknown"}
+Question/Notes: ${session.reason || "Not captured"}`
+        );
+
+        sendTextToken(
+          ws,
+          "Great. I will send your message to the team and someone will get back to you shortly."
+        );
+
+        setTimeout(() => {
+          endConversation(ws, {
+            reason: "question-complete",
+            callSid: session.callSid,
+            patientName: session.patientName,
+            intent: session.intent,
+          });
+        }, 6000);
+
         sessions.delete(session.callSid);
         return;
       }

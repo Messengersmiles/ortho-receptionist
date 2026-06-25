@@ -310,6 +310,39 @@ async function finalizeAndNotify(session, ws) {
   }, 7000);
 }
 
+async function finalizeNewPatientConsultation(session, ws) {
+  const lines = [
+    "📞 AI RECEPTIONIST",
+    `Patient Name: ${session.patientName || "Not captured"}`,
+    `Caller: ${session.callerNumber || "Unknown"}`,
+    `Type: ${session.callTypeLabel || "New Patient Consultation"}`,
+  ];
+
+  if (session.appointmentType) {
+    lines.push(`Appointment type: ${session.appointmentType}`);
+  }
+
+  if (session.preferredTimes) {
+    lines.push(`Preferred days/times: ${session.preferredTimes}`);
+  }
+
+  await safeText(officeLineTextNumber, lines.join("\n"));
+
+  sendTextToken(
+    ws,
+    "The team will get back to you soon with some options. In the meantime, if you'd like to check availability and or book online, please visit messenger dash smiles dot com."
+  );
+
+  setTimeout(() => {
+    endConversation(ws, {
+      reason: "new-patient-consultation",
+      callSid: session.callSid,
+      patientName: session.patientName,
+      intent: session.intent,
+    });
+  }, 9000);
+}
+
 // ===== INBOUND CALL WEBHOOK =====
 app.post("/voice", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
@@ -513,7 +546,7 @@ Details: ${session.reason}`
 
           sendTextToken(
             ws,
-            "Wonderful. We offer complimentary consultations, and we treat the whole family, children, teens, and adults. What days and times usually work best for you? A team member will get back to you soon with options. You can also book online at messenger dash smiles dot com."
+            "Wonderful. We offer complimentary consultations, and we treat the whole family, children, teens, and adults. What days and times usually work best for you?"
           );
           return;
         }
@@ -528,6 +561,14 @@ Details: ${session.reason}`
 
       if (session.stage === "ask-times") {
         session.preferredTimes = userText;
+
+        if (session.callTypeLabel === "New Patient Consultation") {
+          session.stage = "finish";
+          await finalizeNewPatientConsultation(session, ws);
+          sessions.delete(session.callSid);
+          return;
+        }
+
         session.stage = "finish";
         await finalizeAndNotify(session, ws);
         sessions.delete(session.callSid);

@@ -362,14 +362,11 @@ app.post("/voice", (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
   const connect = twiml.connect();
 
-connect.conversationRelay({
-  url: `wss://${publicHost}/conversation-relay`,
-  ttsProvider: "ElevenLabs",
-  voice: ELEVENLABS_VOICE,
-  interruptible: "speech",
-  speechTimeout: "3",
-  speechModel: "phone_call",
-  enhanced: "true",
+  connect.conversationRelay({
+    url: `wss://${publicHost}/conversation-relay`,
+    ttsProvider: "ElevenLabs",
+    voice: ELEVENLABS_VOICE,
+    interruptible: "speech",
    welcomeGreeting: isLunchHour()
   ? "Hi, thank you for calling Messenger Orthodontics. Our team is currently at lunch, but I'm a virtual receptionist and I'm here to gather a few details so our team can better assist you when they return."
   : "Hi, thank you for calling Messenger Orthodontics. Our team is with patients right now, but I'm a virtual receptionist and I'm here to gather a few details so our team can better assist you.",
